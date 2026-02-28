@@ -66,6 +66,23 @@ function volatilityFilter(prices){
 }
 
 /* =============================
+   Market Stability Score
+============================= */
+
+function marketStabilityScore(prices){
+
+    let volatility = 0;
+
+    for(let i=1;i<prices.length;i++){
+        volatility += Math.abs(prices[i]-prices[i-1]);
+    }
+
+    let avgVol = volatility / prices.length;
+
+    return avgVol < 0.0005;
+}
+
+/* =============================
    Welcome Message
 ============================= */
 
@@ -96,7 +113,7 @@ Type /signal to check market.
 });
 
 /* =============================
-   Signal Generator V3
+   Signal Generator V4
 ============================= */
 
 async function generateSignal(){
@@ -126,9 +143,8 @@ async function generateSignal(){
 
         let rsi = calculateRSI(prices);
 
-        if(!volatilityFilter(prices)){
-            return null;
-        }
+        if(!volatilityFilter(prices)) return null;
+        if(!marketStabilityScore(prices)) return null;
 
         // BUY Signal
         if(
@@ -211,7 +227,7 @@ async function signalWorker(){
     lastSignalDate = today;
 
     const message = `
-🔥 ASH SIGNAL PRO AUTO
+🔥 ASH SIGNAL AUTO
 
 Pair: EURUSD
 Direction: ${signal.direction}
@@ -230,4 +246,4 @@ TP: 50 pips
 
 setInterval(signalWorker,300000);
 
-console.log("🔥 Ash Signal Version 3 Running");
+console.log("🔥 Ash Signal Version 4 Running");
