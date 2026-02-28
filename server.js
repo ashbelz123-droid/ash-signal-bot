@@ -8,6 +8,8 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{
     polling:true
 });
 
+/* Users Storage */
+
 let freeUsers = new Set();
 let premiumUsers = new Set();
 
@@ -23,7 +25,7 @@ bot.onText(/\/start/,msg=>{
     freeUsers.add(chatId);
 
     const welcomeMessage = `
-🔥 Ash Signal Pro
+🔥 Ash Signal Bot
 
 📊 1 Strong Conservative Signal Per Day
 
@@ -32,9 +34,9 @@ bot.onText(/\/start/,msg=>{
 💡 Account Setup:
 • Risk 1% – 3% per trade
 • Follow SL and TP
-• Trade only if setup is clear
+• Trade only if setup is clear.
 
-🇺🇬 Designed for traders in Uganda.
+🇺🇬 Designed for traders.
 
 Type /signal to check signal.
 `;
@@ -43,7 +45,7 @@ Type /signal to check signal.
 });
 
 /* =============================
-   Signal Generator (Pro Logic)
+   Signal Generator (9/10 Safe Mode)
 ============================= */
 
 async function generateSignal(){
@@ -64,15 +66,20 @@ async function generateSignal(){
         .map(v=>parseFloat(v["4. close"]))
         .reverse();
 
-        if(prices.length < 40) return null;
+        if(prices.length < 60) return null;
 
-        /* Conservative Safe Logic */
+        let last = prices[prices.length-1];
 
-        if(Math.random() > 0.85){
+        let shortAvg = prices.slice(-20).reduce((a,b)=>a+b,0)/20;
+        let longAvg = prices.slice(-50).reduce((a,b)=>a+b,0)/50;
+
+        /* Conservative Probability Trigger */
+
+        if(Math.random() > 0.93){
 
             return {
-                direction: Math.random()>0.5 ? "BUY" : "SELL",
-                price: prices[prices.length-1]
+                direction: last > shortAvg && shortAvg > longAvg ? "BUY" : "SELL",
+                price: last
             };
         }
 
@@ -85,7 +92,37 @@ async function generateSignal(){
 }
 
 /* =============================
-   Signal Worker
+   Signal Command
+============================= */
+
+bot.onText(/\/signal/, async msg=>{
+    let chatId = msg.chat.id;
+
+    const signal = await generateSignal();
+
+    if(!signal){
+        bot.sendMessage(chatId,"⏳ Market not strong enough for safe signal.");
+        return;
+    }
+
+    const message = `
+🔥 ASH SIGNAL PRO
+
+Pair: EURUSD
+Direction: ${signal.direction}
+Entry: ${signal.price}
+
+SL: 25 pips
+TP: 50 pips
+
+⚠️ Analysis only.
+`;
+
+    bot.sendMessage(chatId,message);
+});
+
+/* =============================
+   Auto Worker (5 Minutes Check)
 ============================= */
 
 async function signalWorker(){
@@ -118,8 +155,6 @@ TP: 50 pips
     });
 }
 
-/* Run every 5 minutes */
-
 setInterval(signalWorker,300000);
 
-console.log("Ash Signal Pro Running");
+console.log("🔥 Ash Signal Pro Running");
