@@ -7,33 +7,37 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{
     polling:true
 });
 
-let users = new Set();
+// User storage
+let freeUsers = new Set();
+let premiumUsers = new Set();
 let lastSignalDate = null;
 
+// Start command
 bot.onText(/\/start/,msg=>{
-    users.add(msg.chat.id);
+    let chatId = msg.chat.id;
 
-    bot.sendMessage(msg.chat.id,
-        "🔥 Ash Signal Bot\n\n✅ 1 Strong Signal Per Day\n📊 EUR/USD H1 Analysis\n⚠️ Signals are guidance only."
+    freeUsers.add(chatId);
+
+    bot.sendMessage(chatId,
+        "🔥 Welcome to Ash Signal Bot\n\n✅ You are now a free signal user\n📊 You will receive 1 strong signal per day\n⚠️ Analysis only."
     );
 });
 
+// Signal generator
 function generateSignal(){
 
     if(Math.random() > 0.8){
 
         return {
-            direction: Math.random()>0.5?"BUY":"SELL",
-            price:"Market Price",
-            sl:25,
-            tp:50
+            direction: Math.random()>0.5 ? "BUY" : "SELL"
         };
     }
 
     return null;
 }
 
-function worker(){
+// Worker system
+function signalWorker(){
 
     let today = new Date().toDateString();
 
@@ -50,19 +54,24 @@ function worker(){
 
 Pair: EURUSD
 Direction: ${signal.direction}
-Entry: ${signal.price}
-SL: ${signal.sl} pips
-TP: ${signal.tp} pips
+Entry: Market Price
+SL: 25 pips
+TP: 50 pips
 
 ⚠️ Analysis only
 `;
 
-        users.forEach(id=>{
+        freeUsers.forEach(id=>{
+            bot.sendMessage(id,message);
+        });
+
+        premiumUsers.forEach(id=>{
             bot.sendMessage(id,message);
         });
     }
 }
 
-setInterval(worker,300000);
+// Check every 5 minutes
+setInterval(signalWorker,300000);
 
 console.log("Ash Signal Bot Running");
