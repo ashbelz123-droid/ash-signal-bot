@@ -11,95 +11,97 @@ const API_KEY = process.env.ALPHA_KEY;
 const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 
-const bot = new TelegramBot(TELEGRAM_TOKEN);
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-// Forex pairs monitored
+// Forex pairs
 const PAIRS = [
     { from: "EUR", to: "USD" },
     { from: "GBP", to: "USD" }
 ];
 
-// Market scanner
-async function scanMarket(pair) {
+// ===== AI Signal Engine =====
+async function analyzePair(pair) {
+
     try {
-        const url = `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${pair.from}&to_symbol=${pair.to}&interval=5min&apikey=${API_KEY}`;
+
+        const url =
+        `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${pair.from}&to_symbol=${pair.to}&interval=5min&apikey=${API_KEY}`;
 
         const response = await axios.get(url);
 
         const data = response.data["Time Series FX (5min)"];
         if (!data) return;
 
-        const times = Object.keys(data).slice(0, 20);
-
-        let prices = times.map(t =>
-            parseFloat(data[t]["4. close"])
-        );
+        const prices = Object.keys(data)
+        .slice(0, 30)
+        .map(t => parseFloat(data[t]["4. close"]));
 
         const current = prices[0];
 
         const sma =
-            prices.reduce((a, b) => a + b, 0) / prices.length;
+        prices.reduce((a,b)=>a+b,0) / prices.length;
 
-        const momentum = current - prices[5];
+        const momentum = current - prices[8];
 
-        generateSignal(pair, current, sma, momentum);
+        let signal = "HOLD 🤝";
 
-    } catch (err) {
-        console.log("API Error:", err.message);
-    }
-}
+        if (current > sma && momentum > 0.0001)
+            signal = "BUY 📈";
 
-// Signal logic
-function generateSignal(pair, price, sma, momentum) {
+        else if (current < sma && momentum < -0.0001)
+            signal = "SELL 📉";
 
-    let signal = "HOLD 🤝";
-    let tp = "";
-    let sl = "";
+        if(signal !== "HOLD 🤝"){
 
-    if (price > sma && momentum > 0) {
-        signal = "BUY 📈";
+            const tp =
+            signal === "BUY 📈"
+            ? (current + 0.0025).toFixed(5)
+            : (current - 0.0025).toFixed(5);
 
-        tp = (price + 0.0020).toFixed(5);
-        sl = (price - 0.0010).toFixed(5);
-    }
+            const sl =
+            signal === "BUY 📈"
+            ? (current - 0.0012).toFixed(5)
+            : (current + 0.0012).toFixed(5);
 
-    else if (price < sma && momentum < 0) {
-        signal = "SELL 📉";
-
-        tp = (price - 0.0020).toFixed(5);
-        sl = (price + 0.0010).toFixed(5);
-    }
-
-    if (signal !== "HOLD 🤝") {
-
-        const message = `
-🔥 ASH SIGNAL BOT 🔥
+            const message = `
+🔥 ASH SIGNAL BOT PRO AI 🔥
 
 Pair: ${pair.from}/${pair.to}
 Signal: ${signal}
 
-Entry: ${price}
-Take Profit: ${tp}
-Stop Loss: ${sl}
+Entry: ${current}
+TP: ${tp}
+SL: ${sl}
 
-AI Trading Assistant Mode 🤖
+AI Filter Active 🤖
 `;
 
-        bot.sendMessage(CHAT_ID, message);
+            await bot.sendMessage(CHAT_ID, message);
+        }
+
+    } catch(err){
+        console.log("AI Engine Error:", err.message);
     }
 }
 
-// Bot scheduler (5 minutes safe free API interval)
-function runBot() {
-    PAIRS.forEach(scanMarket);
+// Scheduler (Render safe)
+async function runBot(){
+    for(const pair of PAIRS){
+        await analyzePair(pair);
+    }
 }
 
-setInterval(runBot, 300000);
+// Wake-up endpoint (VERY IMPORTANT for Render free plan)
+app.get("/", async (req,res)=>{
 
-app.get("/", (req, res) => {
-    res.send("🔥 Ash Signal Bot Running");
+    await runBot();
+
+    res.send("🔥 Ash Signal Bot Pro AI Running");
 });
 
-app.listen(PORT, () => {
-    console.log("Ash Signal Bot Active");
+// Run scheduler every 4 minutes
+setInterval(runBot, 240000);
+
+app.listen(PORT,()=>{
+    console.log("Ash Signal Bot Pro AI Live");
 });
