@@ -6,178 +6,173 @@ const TelegramBot = require("node-telegram-bot-api");
 
 const app = express();
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 10000;
 const API_KEY = process.env.ALPHA_KEY;
 const TOKEN = process.env.TG_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 
-const bot = new TelegramBot(TOKEN);
+// ✅ Correct Telegram Bot Initialization
+const bot = new TelegramBot(TOKEN, {
+    polling: true
+});
 
-// ============================
-// CONFIG
-// ============================
+// =============================
+// Config
+// =============================
 
-const ACCOUNT_BALANCE = 1000; // change to yours
-const RISK_PERCENT = 1; // 1% per trade
-const MAX_DRAWDOWN_PERCENT = 5;
-
-let equity = ACCOUNT_BALANCE;
-let peakEquity = ACCOUNT_BALANCE;
-
-let stats = {
-    total: 0,
-    wins: 0,
-    losses: 0
-};
+const PAIR = { from:"EUR", to:"USD" };
 
 let signalToday = 0;
 const MAX_SIGNAL_PER_DAY = 1;
 
-const PAIR = { from: "EUR", to: "USD" };
-
-// ============================
-// Utilities
-// ============================
+// =============================
+// Utility Functions
+// =============================
 
 function avg(arr){
     return arr.reduce((a,b)=>a+b,0)/arr.length;
 }
 
-function vol(arr){
-    return Math.max(...arr) - Math.min(...arr);
+function volatility(arr){
+    return Math.max(...arr)-Math.min(...arr);
 }
 
-function riskReward(entry, sl, tp){
-    const risk = Math.abs(entry - sl);
-    const reward = Math.abs(tp - entry);
-    return reward / risk;
-}
+// =============================
+// Start Command
+// =============================
 
-function sessionAllowed(){
-    const hour = new Date().getUTCHours();
-    return (hour >= 7 && hour <= 20);
-}
+bot.onText(/\/start/, (msg)=>{
+    bot.sendMessage(msg.chat.id,
+`🔥 AshBot Active
 
-function calculatePositionSize(entry, sl){
-    const riskAmount = (ACCOUNT_BALANCE * RISK_PERCENT)/100;
-    const stopDistance = Math.abs(entry - sl);
-    return riskAmount / stopDistance;
-}
+🏛 Institutional Research Signal Bot
 
-function drawdownExceeded(){
-    const dd = ((peakEquity - equity)/peakEquity)*100;
-    return dd >= MAX_DRAWDOWN_PERCENT;
-}
+✅ Daily 1 strong signal
+✅ Risk control philosophy
 
-// ============================
+Type /help`);
+});
 
-async function fetchData(interval){
-    const url =
-    `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${PAIR.from}&to_symbol=${PAIR.to}&interval=${interval}&apikey=${API_KEY}`;
-
-    const response = await axios.get(url);
-    return response.data[`Time Series FX (${interval})`];
-}
-
-// ============================
+// =============================
+// Market Scanner
+// =============================
 
 async function scanMarket(){
 
     if(signalToday >= MAX_SIGNAL_PER_DAY) return;
-    if(!sessionAllowed()) return;
-    if(drawdownExceeded()) return;
 
     try{
 
-        const data1H = await fetchData("60min");
-        const data4H = await fetchData("240min");
+        const url =
+        `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${PAIR.from}&to_symbol=${PAIR.to}&interval=60min&apikey=${API_KEY}`;
 
-        if(!data1H || !data4H) return;
+        const response = await axios.get(url);
 
-        const prices1H = Object.keys(data1H).slice(0,120)
-        .map(t=>parseFloat(data1H[t]["4. close"]));
+        const data =
+        response?.data?.["Time Series FX (60min)"];
 
-        const prices4H = Object.keys(data4H).slice(0,120)
-        .map(t=>parseFloat(data4H[t]["4. close"]));
+        if(!data) return;
 
-        const current = prices1H[0];
+        const times = Object.keys(data);
 
-        const sma4H = avg(prices4H);
-        const bias4H = current > sma4H ? "BUY" : "SELL";
+        if(times.length < 80) return;
 
-        const sma1H = avg(prices1H);
-        const momentum = current - prices1H[10];
-        const volatility = vol(prices1H);
+        const prices =
+        times.slice(0,100)
+        .map(t=>parseFloat(data[t]["4. close"]))
+        .filter(x=>!isNaN(x));
 
-        if(volatility < 0.002 || volatility > 0.02)
-            return;
+        if(prices.length < 50) return;
+
+        const current = prices[0];
+
+        const sma = avg(prices);
+
+        const momentum = current - prices[10];
+
+        const vol = volatility(prices);
+
+        if(vol < 0.002 || vol > 0.02) return;
 
         let signal = null;
 
-        if(bias4H === "BUY" && current > sma1H && momentum > volatility*0.07)
-            signal = "BUY";
+        if(current > sma && momentum > vol*0.07)
+            signal = "BUY 📈";
 
-        if(bias4H === "SELL" && current < sma1H && momentum < -volatility*0.07)
-            signal = "SELL";
+        if(current < sma && momentum < -vol*0.07)
+            signal = "SELL 📉";
 
         if(!signal) return;
 
         const tp =
         signal === "BUY"
-        ? Math.max(...prices1H.slice(0,30))
-        : Math.min(...prices1H.slice(0,30));
+        ? Math.max(...prices.slice(0,30))
+        : Math.min(...prices.slice(0,30));
 
         const sl =
         signal === "BUY"
-        ? current - volatility*0.4
-        : current + volatility*0.4;
+        ? current - vol*0.4
+        : current + vol*0.4;
 
-        const rr = riskReward(current, sl, tp);
-        if(rr < 2) return;
-
-        const lotSize = calculatePositionSize(current, sl);
+        const entryLow = (current - vol*0.05).toFixed(5);
+        const entryHigh = (current + vol*0.05).toFixed(5);
 
         const confidence =
-        Math.min(100,
-        Math.abs(momentum)/(volatility*0.1)*100
+        Math.min(
+            100,
+            Math.abs(momentum)/(vol*0.1)*100
         ).toFixed(0);
 
         const message =
-`🏛 ASHBOT V5 QUANT ENGINE
+`🏛 ASHBOT INSTITUTIONAL SIGNAL
 
 Pair: EUR/USD
-Signal: ${signal}
+Bias: ${signal}
+
+Entry Zone:
+${entryLow} — ${entryHigh}
+
+Take Profit:
+${tp.toFixed(5)}
+
+Stop Loss:
+${sl.toFixed(5)}
+
 Confidence: ${confidence}%
 
-Entry: ${current.toFixed(5)}
-TP: ${tp.toFixed(5)}
-SL: ${sl.toFixed(5)}
-
-Risk: ${RISK_PERCENT}%
-Lot Size: ${lotSize.toFixed(2)}
-RR: 1:${rr.toFixed(2)}
-
-Stats:
-Trades: ${stats.total}
-Wins: ${stats.wins}
-Losses: ${stats.losses}
+⚠ Research signal only.
+Risk management required.
 `;
 
         await bot.sendMessage(CHAT_ID,message);
 
-        stats.total++;
         signalToday++;
 
     }catch(err){
-        console.log(err.message);
+        console.log("Scan Error:",err.message);
     }
 }
 
-// ============================
+// =============================
+// Auto Scanner Engine
+// =============================
 
-app.get("/", async (req,res)=>{
-    await scanMarket();
-    res.send("AshBot V5 Quant Engine Running");
+setInterval(()=>{
+    scanMarket();
+}, 60 * 60 * 1000);
+
+// =============================
+// Server Route
+// =============================
+
+app.get("/",(req,res)=>{
+    res.send("🔥 AshBot Server Running");
 });
 
-app.listen(PORT,"0.0.0.0");
+// =============================
+// Start Server
+// =============================
+
+app.listen(PORT,"0.0.0.0",()=>{
+    console.log("🔥 AshBot Live on Port",PORT);
+});
