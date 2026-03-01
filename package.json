@@ -8,7 +8,7 @@
     "express": "^4.19.2",
     "node-telegram-bot-api": "^0.65.0"
   },
- 2  "scripts": {
+  "scripts": {
     "start": "node server.js"
   }
 }
