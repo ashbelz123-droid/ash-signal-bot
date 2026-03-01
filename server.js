@@ -14,41 +14,41 @@ const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-// ==============================
+// =============================
 // Signal Memory Protection
-// ==============================
+// =============================
 
 let lastSignalKey = "";
 
-// ==============================
-// Trading Pair Universe
-// ==============================
+// =============================
+// Trading Universe
+// =============================
 
 const PAIRS = [
     { from:"EUR", to:"USD" },
     { from:"GBP", to:"USD" }
 ];
 
-// ==============================
-// Statistical Helper Functions
-// ==============================
+// =============================
+// Statistical Intelligence Engine
+// =============================
 
-function calculateTrendScore(current,sma,momentum,volatility){
+function calculateConfidence(current,sma,momentum,volatility){
 
     let score = 50;
 
     if(current > sma) score += 15;
     if(momentum > 0) score += 15;
 
-    if(Math.abs(momentum) > volatility*0.015)
+    if(Math.abs(momentum) > volatility*0.02)
         score += 10;
 
     return score;
 }
 
-// ==============================
-// Research Signal Engine
-// ==============================
+// =============================
+// Elite Research Signal Scanner
+// =============================
 
 async function analyzePair(pair){
 
@@ -59,26 +59,27 @@ async function analyzePair(pair){
 
         const response = await axios.get(url);
 
-        const dataset = response?.data?.["Time Series FX (Daily)"];
+        const dataset =
+        response?.data?.["Time Series FX (Daily)"];
 
         if(!dataset) return;
 
         const times = Object.keys(dataset);
 
-        if(times.length < 25) return;
+        if(times.length < 30) return;
 
         const prices = times.slice(0,30).map(t =>
             parseFloat(dataset[t]["4. close"])
         ).filter(x=>!isNaN(x));
 
-        if(prices.length < 12) return;
+        if(prices.length < 15) return;
 
         const current = prices[0];
 
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[4];
+        const momentum = current - prices[3];
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
@@ -101,9 +102,9 @@ async function analyzePair(pair){
         lastSignalKey = signalKey;
 
         const confidence =
-        calculateTrendScore(current,sma,momentum,volatility);
+        calculateConfidence(current,sma,momentum,volatility);
 
-        if(confidence < 65) return;
+        if(confidence < 70) return;
 
         const tp =
         signal.includes("BUY")
@@ -116,30 +117,30 @@ async function analyzePair(pair){
         : current + volatility*0.18;
 
         const message =
-`🔥 ASH SIGNAL BOT V5 RESEARCH ENGINE 🔥
+`🔥 ASH SIGNAL BOT V6 ELITE 🔥
 
 Pair: ${pair.from}/${pair.to}
 
 Signal: ${signal}
-Confidence Score: ${confidence.toFixed(1)}%
+Confidence: ${confidence.toFixed(1)}%
 
 Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-Research Filtering Active 🤖
+Sent to Telegram Chat 🤖
 `;
 
         await bot.sendMessage(CHAT_ID,message);
 
     }catch(err){
-        console.log("Engine Error:",err.message);
+        console.log("Scanner Error:",err.message);
     }
 }
 
-// ==============================
+// =============================
 // Render Wake Endpoint
-// ==============================
+// =============================
 
 app.get("/", async (req,res)=>{
 
@@ -149,7 +150,7 @@ app.get("/", async (req,res)=>{
             await analyzePair(pair);
         }
 
-        res.send("🔥 Ash Signal Bot V5 Running");
+        res.send("🔥 Ash Signal Bot V6 Running");
 
     }catch(err){
         res.send("Bot Active");
@@ -157,10 +158,10 @@ app.get("/", async (req,res)=>{
 
 });
 
-// ==============================
+// =============================
 // Server Listener
-// ==============================
+// =============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V5 Live");
+    console.log("Ash Signal Bot V6 Live");
 });
