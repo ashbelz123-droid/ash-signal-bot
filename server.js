@@ -12,42 +12,49 @@ const API_KEY = process.env.ALPHA_KEY;
 const TOKEN = process.env.TG_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 
-// ✅ Telegram Bot Setup
+// Telegram Bot
 const bot = new TelegramBot(TOKEN,{
     polling:true
 });
 
-// ===============================
+// =============================
 // Config
-// ===============================
+// =============================
 
 const PAIR = { from:"EUR", to:"USD" };
 
 let signalToday = 0;
 const MAX_SIGNAL_PER_DAY = 1;
 
-// ===============================
-// Utility Functions
-// ===============================
+// =============================
+// Warning Message (Business Style)
+// =============================
 
-function avg(arr){
-    return arr.reduce((a,b)=>a+b,0)/arr.length;
+function warningMessage(){
+
+return `
+⚠ AshBot Research Signal Service
+
+✅ Free Community Signal
+💡 Premium Service Coming Later
+
+Trading contains risk.
+Use proper money management.
+
+Type /help for commands.
+`;
+
 }
 
-function volatility(arr){
-    return Math.max(...arr)-Math.min(...arr);
-}
-
-// ===============================
-// Premium Message Template
-// ===============================
+// =============================
+// Premium Signal Template
+// =============================
 
 function premiumTemplate(signal, entryLow, entryHigh, tp, sl, confidence){
 
 return `
-🏛 ASHBOT PREMIUM RESEARCH
+🏛 ASHBOT INSTITUTIONAL RESEARCH
 
-Pair: EUR/USD
 Bias: ${signal}
 
 Entry Zone:
@@ -59,18 +66,57 @@ ${tp.toFixed(5)}
 Stop Loss:
 ${sl.toFixed(5)}
 
-Confidence Level:
-${confidence}% Institutional Filter
+Confidence: ${confidence}%
 
 ⚠ Research signal only.
-Risk management required.
+No profit guarantee.
 `;
-
 }
 
-// ===============================
-// Market Scanner
-// ===============================
+// =============================
+// Utility
+// =============================
+
+function avg(arr){
+    return arr.reduce((a,b)=>a+b,0)/arr.length;
+}
+
+function volatility(arr){
+    return Math.max(...arr)-Math.min(...arr);
+}
+
+// =============================
+// Commands
+// =============================
+
+bot.onText(/\/start/, async(msg)=>{
+
+    await bot.sendMessage(
+        msg.chat.id,
+        warningMessage()
+    );
+
+});
+
+bot.onText(/\/help/, async(msg)=>{
+
+    await bot.sendMessage(
+        msg.chat.id,
+`
+Commands:
+
+/start
+/help
+
+AshBot Free Community Signal Service.
+`
+    );
+
+});
+
+// =============================
+// Market Scanner (1 Signal Per Day)
+// =============================
 
 async function scanMarket(){
 
@@ -157,40 +203,18 @@ async function scanMarket(){
     }
 }
 
-// ===============================
-// Auto Engine
-// ===============================
+// =============================
+// Auto Scanner (1 Hour)
+// =============================
 
 setInterval(()=>{
     scanMarket();
 }, 60 * 60 * 1000);
 
-// ===============================
-// Telegram Commands
-// ===============================
-
-bot.onText(/\/start/, (msg)=>{
-    bot.sendMessage(msg.chat.id,
-`🔥 AshBot Premium Research Active
-
-Daily institutional signal service.
-
-Type /help`);
-});
-
-bot.onText(/\/help/, (msg)=>{
-    bot.sendMessage(msg.chat.id,
-`Commands:
-/start
-/help
-
-Premium research signal bot.`);
-});
-
-// ===============================
+// =============================
 
 app.get("/",(req,res)=>{
-    res.send("🔥 AshBot Premium Server Running");
+    res.send("🔥 AshBot Community Server Running");
 });
 
 app.listen(PORT,"0.0.0.0",()=>{
