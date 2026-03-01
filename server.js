@@ -14,14 +14,24 @@ const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-// ================================
-// Professional Signal Engine
-// ================================
+// =========================
+// Signal Memory Lock System
+// =========================
+
+let lastSignal = "";
+
+// =========================
+// Trading Pairs
+// =========================
 
 const PAIRS = [
     { from:"EUR", to:"USD" },
     { from:"GBP", to:"USD" }
 ];
+
+// =========================
+// Advanced Signal Engine
+// =========================
 
 async function analyzePair(pair){
 
@@ -36,13 +46,13 @@ async function analyzePair(pair){
 
         const dataset = response.data["Time Series FX (Daily)"];
 
-        if(!dataset || typeof dataset !== "object") return;
+        if(!dataset) return;
 
         const times = Object.keys(dataset);
 
         if(times.length < 20) return;
 
-        const prices = times.slice(0,20).map(t =>
+        const prices = times.slice(0,30).map(t =>
             parseFloat(dataset[t]["4. close"])
         ).filter(x=>!isNaN(x));
 
@@ -53,38 +63,45 @@ async function analyzePair(pair){
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[3];
-
-        let signal = null;
-        let confidence = 0;
-
-        if(current > sma && momentum > 0){
-            signal = "BUY 📈";
-            confidence = 70 + Math.random()*20;
-        }
-
-        if(current < sma && momentum < 0){
-            signal = "SELL 📉";
-            confidence = 70 + Math.random()*20;
-        }
-
-        if(!signal) return;
+        const momentum = current - prices[4];
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
 
+        let signal = null;
+        let confidence = 0;
+
+        if(current > sma && momentum > volatility*0.02){
+            signal = "BUY 📈";
+            confidence = 75 + Math.random()*20;
+        }
+
+        if(current < sma && momentum < -volatility*0.02){
+            signal = "SELL 📉";
+            confidence = 75 + Math.random()*20;
+        }
+
+        if(!signal) return;
+
+        const signalKey =
+        `${pair.from}-${pair.to}-${signal}`;
+
+        if(lastSignal === signalKey) return;
+
+        lastSignal = signalKey;
+
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.3
-        : current - volatility*0.3;
+        ? current + volatility*0.35
+        : current - volatility*0.35;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.15
-        : current + volatility*0.15;
+        ? current - volatility*0.18
+        : current + volatility*0.18;
 
         const message =
-`🔥 ASH SIGNAL BOT V2 PROFESSIONAL 🔥
+`🔥 ASH SIGNAL BOT V3 ULTRA 🔥
 
 Pair: ${pair.from}/${pair.to}
 
@@ -95,19 +112,19 @@ Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-Professional Filtering Engine 🤖
+Advanced Filtering Active 🤖
 `;
 
         await bot.sendMessage(CHAT_ID,message);
 
     }catch(err){
-        console.log("Signal Engine Error:",err.message);
+        console.log("Engine Error:",err.message);
     }
 }
 
-// ================================
+// =========================
 // Render Wake Endpoint
-// ================================
+// =========================
 
 app.get("/", async (req,res)=>{
 
@@ -117,7 +134,7 @@ app.get("/", async (req,res)=>{
             await analyzePair(pair);
         }
 
-        res.send("🔥 Ash Signal Bot V2 Running");
+        res.send("🔥 Ash Signal Bot V3 Running");
 
     }catch(err){
         res.send("Bot Active");
@@ -125,10 +142,10 @@ app.get("/", async (req,res)=>{
 
 });
 
-// ================================
+// =========================
 // Server Listener
-// ================================
+// =========================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V2 Live");
+    console.log("Ash Signal Bot V3 Live");
 });
