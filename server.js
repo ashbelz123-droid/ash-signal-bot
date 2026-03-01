@@ -14,45 +14,51 @@ const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-// =============================
-// Signal Memory Protection
-// =============================
+// ============================
+// Signal Protection System
+// ============================
 
 let lastSignalKey = "";
+let dailySignalCount = 0;
 
-// =============================
+const MAX_DAILY_SIGNAL = 5;
+
+// ============================
 // Trading Universe
-// =============================
+// ============================
 
 const PAIRS = [
     { from:"EUR", to:"USD" },
     { from:"GBP", to:"USD" }
 ];
 
-// =============================
-// Statistical Intelligence Engine
-// =============================
+// ============================
+// Confidence Calculator
+// ============================
 
-function calculateConfidence(current,sma,momentum,volatility){
+function confidenceScore(current,sma,momentum,volatility){
 
     let score = 50;
 
     if(current > sma) score += 15;
     if(momentum > 0) score += 15;
 
-    if(Math.abs(momentum) > volatility*0.02)
-        score += 10;
+    if(Math.abs(momentum) > volatility*0.03)
+        score += 15;
 
     return score;
 }
 
-// =============================
-// Elite Research Signal Scanner
-// =============================
+// ============================
+// Signal Engine
+// ============================
 
 async function analyzePair(pair){
 
     try{
+
+        if(dailySignalCount >= MAX_DAILY_SIGNAL)
+            return;
 
         const url =
         `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${pair.from}&to_symbol=${pair.to}&apikey=${API_KEY}`;
@@ -86,11 +92,19 @@ async function analyzePair(pair){
 
         let signal = null;
 
-        if(current > sma && momentum > volatility*0.02)
+        if(
+            current > sma &&
+            momentum > volatility*0.03
+        ){
             signal = "BUY 📈";
+        }
 
-        if(current < sma && momentum < -volatility*0.02)
+        if(
+            current < sma &&
+            momentum < -volatility*0.03
+        ){
             signal = "SELL 📉";
+        }
 
         if(!signal) return;
 
@@ -99,25 +113,23 @@ async function analyzePair(pair){
 
         if(signalKey === lastSignalKey) return;
 
-        lastSignalKey = signalKey;
-
         const confidence =
-        calculateConfidence(current,sma,momentum,volatility);
+        confidenceScore(current,sma,momentum,volatility);
 
-        if(confidence < 70) return;
+        if(confidence < 75) return;
 
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.35
-        : current - volatility*0.35;
+        ? current + volatility*0.4
+        : current - volatility*0.4;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.18
-        : current + volatility*0.18;
+        ? current - volatility*0.2
+        : current + volatility*0.2;
 
         const message =
-`🔥 ASH SIGNAL BOT V6 ELITE 🔥
+`🔥 ASH SIGNAL BOT V7 SOLID MODE 🔥
 
 Pair: ${pair.from}/${pair.to}
 
@@ -128,19 +140,22 @@ Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-Sent to Telegram Chat 🤖
+Solid Filtering Active ⭐
 `;
 
         await bot.sendMessage(CHAT_ID,message);
 
+        lastSignalKey = signalKey;
+        dailySignalCount++;
+
     }catch(err){
-        console.log("Scanner Error:",err.message);
+        console.log(err.message);
     }
 }
 
-// =============================
-// Render Wake Endpoint
-// =============================
+// ============================
+// Render Endpoint
+// ============================
 
 app.get("/", async (req,res)=>{
 
@@ -150,7 +165,7 @@ app.get("/", async (req,res)=>{
             await analyzePair(pair);
         }
 
-        res.send("🔥 Ash Signal Bot V6 Running");
+        res.send("🔥 Ash Signal Bot V7 Solid Running");
 
     }catch(err){
         res.send("Bot Active");
@@ -158,10 +173,10 @@ app.get("/", async (req,res)=>{
 
 });
 
-// =============================
+// ============================
 // Server Listener
-// =============================
+// ============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V6 Live");
+    console.log("Ash Signal Bot V7 Live");
 });
