@@ -4,6 +4,14 @@ const express = require("express");
 const axios = require("axios");
 const TelegramBot = require("node-telegram-bot-api");
 
+process.on("uncaughtException", err=>{
+    console.log("Uncaught Exception:", err.message);
+});
+
+process.on("unhandledRejection", err=>{
+    console.log("Unhandled Rejection:", err?.message);
+});
+
 const app = express();
 
 const PORT = process.env.PORT || 10000;
@@ -11,16 +19,22 @@ const API_KEY = process.env.ALPHA_KEY;
 const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 
+if(!API_KEY || !TELEGRAM_TOKEN || !CHAT_ID){
+    console.log("Missing environment variables.");
+}
+
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-// ===== GOD AI PAIRS =====
 const PAIRS = [
     { from:"EUR", to:"USD" },
     { from:"GBP", to:"USD" }
 ];
 
-// ===== GOD AI ENGINE =====
-async function analyzePair(pair){
+// ===============================
+// MARKET ENGINE (SAFE VERSION)
+// ===============================
+
+async function scanPair(pair){
 
     try{
 
@@ -29,103 +43,109 @@ async function analyzePair(pair){
 
         const response = await axios.get(url);
 
-        const data = response.data["Time Series FX (Daily)"];
+        if(!response?.data) return null;
 
-        if(!data || typeof data !== "object") return;
+        const dataset = response.data["Time Series FX (Daily)"];
 
-        const times = Object.keys(data);
+        if(!dataset || typeof dataset !== "object") return null;
 
-        if(times.length < 20) return;
+        const keys = Object.keys(dataset);
+        if(keys.length < 20) return null;
 
-        const prices = times.slice(0,20).map(t =>
-            parseFloat(data[t]["4. close"])
-        ).filter(x=>!isNaN(x));
+        const prices = keys.slice(0,20).map(k =>
+            parseFloat(dataset[k]["4. close"])
+        ).filter(n=>!isNaN(n));
 
-        if(prices.length < 10) return;
+        if(prices.length < 10) return null;
 
         const current = prices[0];
+        const sma = prices.reduce((a,b)=>a+b,0)/prices.length;
+        const momentum = current - prices[3];
 
-        const sma =
-        prices.reduce((a,b)=>a+b,0) / prices.length;
+        let signal = null;
+
+        if(current > sma && momentum > 0) signal = "BUY";
+        if(current < sma && momentum < 0) signal = "SELL";
+
+        if(!signal) return null;
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
 
-        const momentum = current - prices[3];
-
-        let signal = "HOLD";
-        let confidence = 0;
-
-        // ===== GOD AI LOGIC =====
-
-        if(current > sma && momentum > 0){
-            signal = "BUY";
-            confidence = 70 + Math.random()*20;
-        }
-
-        else if(current < sma && momentum < 0){
-            signal = "SELL";
-            confidence = 70 + Math.random()*20;
-        }
-
-        if(signal === "HOLD") return;
-
         const tp =
         signal === "BUY"
-        ? (current + volatility*0.3).toFixed(5)
-        : (current - volatility*0.3).toFixed(5);
+        ? current + volatility*0.3
+        : current - volatility*0.3;
 
         const sl =
         signal === "BUY"
-        ? (current - volatility*0.15).toFixed(5)
-        : (current + volatility*0.15).toFixed(5);
+        ? current - volatility*0.15
+        : current + volatility*0.15;
 
-        const message =
-`🔥 ASH SIGNAL BOT GOD AI 🔥
-
-Pair: ${pair.from}/${pair.to}
-
-Signal: ${signal}
-Confidence: ${confidence.toFixed(1)}%
-
-Entry: ${current}
-TP: ${tp}
-SL: ${sl}
-
-Volatility Engine Active 🤖
-`;
-
-        await bot.sendMessage(CHAT_ID,message);
+        return {
+            pair: `${pair.from}/${pair.to}`,
+            signal,
+            entry: current.toFixed(5),
+            tp: tp.toFixed(5),
+            sl: sl.toFixed(5)
+        };
 
     }catch(err){
-        console.log("GOD AI Error:", err.message);
+        console.log("Scan Error:", err.message);
+        return null;
     }
 }
 
-// ===== Render Wake Engine =====
+// ===============================
+// HTTP TRIGGER (RENDER SAFE)
+// ===============================
+
 app.get("/", async (req,res)=>{
 
     try{
+
+        const results = [];
+
         for(const pair of PAIRS){
-            await analyzePair(pair);
+            const result = await scanPair(pair);
+            if(result) results.push(result);
         }
 
-        res.send("🔥 Ash Signal Bot GOD AI Running");
+        if(results.length === 0){
+            return res.send("Bot active. No signals.");
+        }
+
+        for(const r of results){
+
+            const message =
+`🔥 ASH SIGNAL BOT PRODUCTION 🔥
+
+Pair: ${r.pair}
+Signal: ${r.signal}
+
+Entry: ${r.entry}
+TP: ${r.tp}
+SL: ${r.sl}
+
+Risk Management Enabled 📊
+`;
+
+            await bot.sendMessage(CHAT_ID,message);
+        }
+
+        res.send("Signals sent successfully.");
 
     }catch(err){
-        res.send("Bot Active");
+        console.log("Root Error:",err.message);
+        res.send("Bot running safely.");
     }
+
 });
 
-const express = require("express");
-const app = express();
+// ===============================
+// SERVER LISTENER
+// ===============================
 
-const PORT = process.env.PORT || 10000;
-
-app.get("/", (req, res) => {
-    res.send("🔥 Ash Signal Bot Running");
-});
-
-app.listen(PORT, () => {
-    console.log("Server running on port", PORT);
+app.listen(PORT,()=>{
+    console.log("Ash Signal Bot Production Live on Port", PORT);
 });
