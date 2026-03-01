@@ -9,56 +9,63 @@ const app = express();
 const PORT = process.env.PORT;
 
 const API_KEY = process.env.ALPHA_KEY;
-const TELEGRAM_TOKEN = process.env.TG_TOKEN;
+const CHAT_ID = process.env.CHAT_ID;
+const TOKEN = process.env.TG_TOKEN;
 
-const bot = new TelegramBot(TELEGRAM_TOKEN);
+const bot = new TelegramBot(TOKEN);
 
-// ===============================
-// Admin Control
-// ===============================
+// ==============================
+// Memory Protection
+// ==============================
 
-const ADMIN_CHAT_ID = process.env.CHAT_ID;
+let lastSignalKey = "";
+let dailySignalCount = 0;
 
-// Whitelist Users Database (Memory Storage)
-let whitelistUsers = [];
+const MAX_SIGNAL_PER_DAY = 2;
 
-// ===============================
-// User Management
-// ===============================
+// ==============================
+// Market Universe
+// ==============================
 
-function addUser(userId){
-    if(!whitelistUsers.includes(userId)){
-        whitelistUsers.push(userId);
-    }
+const PAIR = {
+    from:"EUR",
+    to:"USD"
+};
+
+// ==============================
+// RSI GOLD FILTER LOGIC
+// ==============================
+
+function calculateProbability(current,sma,momentum,volatility,rsi){
+
+    let score = 50;
+
+    if(current > sma) score += 15;
+    if(momentum > 0) score += 10;
+
+    if(volatility > current*0.001)
+        score += 10;
+
+    if(rsi < 30 || rsi > 70)
+        score += 15;
+
+    return score;
 }
 
-function removeUser(userId){
-    whitelistUsers =
-    whitelistUsers.filter(id => id !== userId);
-}
-
-// ===============================
-// Signal Send Protection
-// ===============================
-
-async function sendSignal(userId,message){
-
-    if(!whitelistUsers.includes(userId))
-        return;
-
-    await bot.sendMessage(userId,message);
-}
-
-// ===============================
-// Signal Scanner Engine
-// ===============================
+// ==============================
+// Market Scanner
+// ==============================
 
 async function scanMarket(){
 
     try{
 
+        if(dailySignalCount >= MAX_SIGNAL_PER_DAY)
+            return;
+
+        // Request Forex Daily Data
         const url =
-        `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=EUR&to_symbol=USD&apikey=${API_KEY}`;
+        `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${PAIR.from}&to_symbol=${PAIR.to}&apikey=${API_KEY}`;
 
         const response = await axios.get(url);
 
@@ -67,92 +74,108 @@ async function scanMarket(){
 
         if(!dataset) return;
 
-        const prices = Object.keys(dataset)
-        .slice(0,40)
-        .map(t=>parseFloat(dataset[t]["4. close"]))
-        .filter(x=>!isNaN(x));
+        const times = Object.keys(dataset);
 
-        if(prices.length < 20) return;
+        if(times.length < 40) return;
+
+        const prices = times.slice(0,50).map(t =>
+            parseFloat(dataset[t]["4. close"])
+        ).filter(x=>!isNaN(x));
+
+        if(prices.length < 25) return;
 
         const current = prices[0];
 
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
+        const momentum = current - prices[5];
+
+        const volatility =
+        Math.max(...prices) - Math.min(...prices);
+
+        // ⭐ RSI Approximation (Since API may not provide RSI directly)
+        const rsi =
+        50 + (momentum / (volatility+0.0001)) * 30;
+
         let signal = null;
 
-        if(current > sma)
+        if(
+            current > sma &&
+            momentum > volatility*0.04 &&
+            rsi < 35
+        ){
             signal = "BUY 📈";
+        }
 
-        if(current < sma)
+        if(
+            current < sma &&
+            momentum < -volatility*0.04 &&
+            rsi > 65
+        ){
             signal = "SELL 📉";
+        }
 
         if(!signal) return;
 
+        const signalKey =
+        `${PAIR.from}-${PAIR.to}-${signal}`;
+
+        if(signalKey === lastSignalKey)
+            return;
+
+        const probability =
+        calculateProbability(current,sma,momentum,volatility,rsi);
+
+        if(probability < 85) return;
+
+        const tp =
+        signal.includes("BUY")
+        ? current + volatility*0.5
+        : current - volatility*0.5;
+
+        const sl =
+        signal.includes("BUY")
+        ? current - volatility*0.25
+        : current + volatility*0.25;
+
         const message =
-`🔥 ASH SIGNAL BOT V11 PRO 🔥
+`🔥 ASH BOT RSI GOLD ELITE 🔥
+
+Pair: EUR/USD
 
 Signal: ${signal}
-Entry: ${current.toFixed(5)}
+RSI Level: ${rsi.toFixed(2)}
+Probability Score: ${probability.toFixed(1)}%
 
-Professional Filter Mode ⭐
+Entry: ${current.toFixed(5)}
+TP: ${tp.toFixed(5)}
+SL: ${sl.toFixed(5)}
+
+Gold Filtering Active ⭐
 `;
 
-        for(const user of whitelistUsers){
-            await sendSignal(user,message);
-        }
+        await bot.sendMessage(CHAT_ID,message);
+
+        lastSignalKey = signalKey;
+        dailySignalCount++;
 
     }catch(err){
         console.log(err.message);
     }
 }
 
-// ===============================
-// Telegram Command Control
-// ===============================
-
-bot.onText(/\/add (\d+)/,(msg,match)=>{
-
-    const chatId = msg.chat.id;
-
-    if(chatId.toString() !== ADMIN_CHAT_ID) return;
-
-    const userId = parseInt(match[1]);
-
-    addUser(userId);
-
-    bot.sendMessage(chatId,"User Added ✅");
-});
-
-bot.onText(/\/remove (\d+)/,(msg,match)=>{
-
-    const chatId = msg.chat.id;
-
-    if(chatId.toString() !== ADMIN_CHAT_ID) return;
-
-    const userId = parseInt(match[1]);
-
-    removeUser(userId);
-
-    bot.sendMessage(chatId,"User Removed ❌");
-});
-
-// ===============================
-// Wake Endpoint (Render)
-// ===============================
+// ==============================
+// Render Endpoint
+// ==============================
 
 app.get("/", async (req,res)=>{
-
     await scanMarket();
-
-    res.send("🔥 Ash Signal Bot V11 Pro Running");
-
+    res.send("🔥 Ash Bot RSI Gold Elite Running");
 });
 
-// ===============================
-// Server Listener
-// ===============================
+// ==============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V11 Live");
+    console.log("Ash Bot Gold Live");
 });
