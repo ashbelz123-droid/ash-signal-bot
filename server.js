@@ -13,51 +13,52 @@ const CHAT_ID = process.env.CHAT_ID;
 
 const bot = new TelegramBot(TOKEN);
 
-// =============================
+// ==============================
 // Safety Warning
-// =============================
+// ==============================
 
 const WARNING_MESSAGE =
 `⚠ ASH BOT RISK NOTICE
 
-Trading contains risk.
-Signals are research based.
+Forex trading contains risk.
+
+Signals are research filtered.
 
 No profit guarantee.
 
 Type /help for guide.
 `;
 
-// =============================
-// Memory Protection
-// =============================
+// ==============================
+// Memory Lock System
+// ==============================
 
-let lastSignalKey = "";
 let signalToday = 0;
+let lastSignalKey = "";
 
 const MAX_SIGNAL_PER_DAY = 1;
 
-// =============================
-// Market Pair Universe
-// =============================
+// ==============================
+// Market Pair
+// ==============================
 
 const PAIR = {
     from:"EUR",
     to:"USD"
 };
 
-// =============================
-// Probability Research Engine
-// =============================
+// ==============================
+// Institutional Research Model
+// ==============================
 
-function probabilityModel(current,sma,momentum,volatility,rsi){
+function researchScore(current,sma,momentum,volatility,rsi){
 
-    let score = 60;
+    let score = 65;
 
     if(current > sma) score += 15;
     if(momentum > 0) score += 10;
 
-    if(Math.abs(momentum) > volatility*0.07)
+    if(Math.abs(momentum) > volatility*0.08)
         score += 10;
 
     if(rsi < 30 || rsi > 70)
@@ -66,9 +67,9 @@ function probabilityModel(current,sma,momentum,volatility,rsi){
     return score;
 }
 
-// =============================
+// ==============================
 // Market Scanner Engine
-// =============================
+// ==============================
 
 async function scanMarket(){
 
@@ -89,20 +90,20 @@ async function scanMarket(){
 
         const times = Object.keys(dataset);
 
-        if(times.length < 80) return;
+        if(times.length < 100) return;
 
-        const prices = times.slice(0,100).map(t =>
+        const prices = times.slice(0,120).map(t =>
             parseFloat(dataset[t]["4. close"])
         ).filter(x=>!isNaN(x));
 
-        if(prices.length < 50) return;
+        if(prices.length < 60) return;
 
         const current = prices[0];
 
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[12];
+        const momentum = current - prices[15];
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
@@ -114,7 +115,7 @@ async function scanMarket(){
 
         if(
             current > sma &&
-            momentum > volatility*0.07 &&
+            momentum > volatility*0.08 &&
             rsi < 30
         ){
             signal = "BUY 📈";
@@ -122,7 +123,7 @@ async function scanMarket(){
 
         if(
             current < sma &&
-            momentum < -volatility*0.07 &&
+            momentum < -volatility*0.08 &&
             rsi > 70
         ){
             signal = "SELL 📉";
@@ -131,33 +132,33 @@ async function scanMarket(){
         if(!signal) return;
 
         const probability =
-        probabilityModel(current,sma,momentum,volatility,rsi);
+        researchScore(current,sma,momentum,volatility,rsi);
 
-        if(probability < 93) return;
+        if(probability < 95) return;
 
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.8
-        : current - volatility*0.8;
+        ? current + volatility*0.9
+        : current - volatility*0.9;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.4
-        : current + volatility*0.4;
+        ? current - volatility*0.45
+        : current + volatility*0.45;
 
         const message =
-`🔥 ASH BOT V13 INSTITUTIONAL 🔥
+`🔥 ASH BOT FINAL LEGENDARY 🔥
 
 Pair: EUR/USD
 Signal: ${signal}
 
-Confidence: ${probability.toFixed(1)}%
+Research Confidence: ${probability.toFixed(1)}%
 
 Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-⭐ Ultra Research Mode
+⭐ Ultra Rare Signal Mode Active
 `;
 
         await bot.sendMessage(CHAT_ID,message);
@@ -170,40 +171,35 @@ SL: ${sl.toFixed(5)}
     }
 }
 
-// =============================
+// ==============================
 // Telegram Commands
-// =============================
+// ==============================
 
 bot.onText(/\/start/, (msg)=>{
-
     bot.sendMessage(msg.chat.id, WARNING_MESSAGE);
-
 });
 
 bot.onText(/\/help/, (msg)=>{
-
     bot.sendMessage(msg.chat.id,
 `ASH BOT GUIDE
 
-Signals are research filtered.
-
-Expect 0–1 signal/day.
-
-Risk management is required.
+✔ Ultra strict filtering
+✔ Expect 0–1 signal/day
+✔ Risk management required
 `);
 });
 
-// =============================
+// ==============================
 // Server Endpoint
-// =============================
+// ==============================
 
 app.get("/", async (req,res)=>{
     await scanMarket();
-    res.send("🔥 Ash Bot V13 Running");
+    res.send("🔥 Ash Bot Final Legendary Running");
 });
 
-// =============================
+// ==============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Bot V13 Live");
+    console.log("Ash Bot Final Live");
 });
