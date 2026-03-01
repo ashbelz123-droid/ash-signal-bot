@@ -1,15 +1,15 @@
 const express = require("express");
 const app = express();
 
-// VERY IMPORTANT
-const PORT = process.env.PORT || 10000;
+// Render provides port automatically
+const PORT = process.env.PORT;
 
-// Simple route
+// Route (Required)
 app.get("/", (req, res) => {
-    res.send("🔥 Ash Signal Bot is Live");
+    res.send("🔥 Ash Signal Bot Running");
 });
 
-// Force bind to 0.0.0.0
+// Bind server to Render network
 app.listen(PORT, "0.0.0.0", () => {
     console.log("Server running on port", PORT);
 });
