@@ -14,18 +14,16 @@ const CHAT_ID = process.env.CHAT_ID;
 const bot = new TelegramBot(TOKEN);
 
 // =============================
-// Safety Warning Message
+// Safety Warning
 // =============================
 
 const WARNING_MESSAGE =
-`⚠️ ASH SIGNAL BOT WARNING ⚠️
+`⚠ ASH BOT RISK NOTICE
 
-This bot provides research forex signals.
+Trading contains risk.
+Signals are research based.
 
-Risk exists in trading.
-No profit is guaranteed.
-
-Use risk management.
+No profit guarantee.
 
 Type /help for guide.
 `;
@@ -36,10 +34,11 @@ Type /help for guide.
 
 let lastSignalKey = "";
 let signalToday = 0;
+
 const MAX_SIGNAL_PER_DAY = 1;
 
 // =============================
-// Market Pair
+// Market Pair Universe
 // =============================
 
 const PAIR = {
@@ -48,17 +47,17 @@ const PAIR = {
 };
 
 // =============================
-// Probability Engine
+// Probability Research Engine
 // =============================
 
-function probabilityEngine(current,sma,momentum,volatility,rsi){
+function probabilityModel(current,sma,momentum,volatility,rsi){
 
     let score = 60;
 
     if(current > sma) score += 15;
     if(momentum > 0) score += 10;
 
-    if(Math.abs(momentum) > volatility*0.06)
+    if(Math.abs(momentum) > volatility*0.07)
         score += 10;
 
     if(rsi < 30 || rsi > 70)
@@ -68,7 +67,7 @@ function probabilityEngine(current,sma,momentum,volatility,rsi){
 }
 
 // =============================
-// Market Scanner
+// Market Scanner Engine
 // =============================
 
 async function scanMarket(){
@@ -90,20 +89,20 @@ async function scanMarket(){
 
         const times = Object.keys(dataset);
 
-        if(times.length < 60) return;
+        if(times.length < 80) return;
 
-        const prices = times.slice(0,80).map(t =>
+        const prices = times.slice(0,100).map(t =>
             parseFloat(dataset[t]["4. close"])
         ).filter(x=>!isNaN(x));
 
-        if(prices.length < 40) return;
+        if(prices.length < 50) return;
 
         const current = prices[0];
 
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[10];
+        const momentum = current - prices[12];
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
@@ -115,7 +114,7 @@ async function scanMarket(){
 
         if(
             current > sma &&
-            momentum > volatility*0.06 &&
+            momentum > volatility*0.07 &&
             rsi < 30
         ){
             signal = "BUY 📈";
@@ -123,7 +122,7 @@ async function scanMarket(){
 
         if(
             current < sma &&
-            momentum < -volatility*0.06 &&
+            momentum < -volatility*0.07 &&
             rsi > 70
         ){
             signal = "SELL 📉";
@@ -132,22 +131,22 @@ async function scanMarket(){
         if(!signal) return;
 
         const probability =
-        probabilityEngine(current,sma,momentum,volatility,rsi);
+        probabilityModel(current,sma,momentum,volatility,rsi);
 
-        if(probability < 92) return;
+        if(probability < 93) return;
 
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.7
-        : current - volatility*0.7;
+        ? current + volatility*0.8
+        : current - volatility*0.8;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.35
-        : current + volatility*0.35;
+        ? current - volatility*0.4
+        : current + volatility*0.4;
 
         const message =
-`🔥 ASH SIGNAL BOT 🔥
+`🔥 ASH BOT V13 INSTITUTIONAL 🔥
 
 Pair: EUR/USD
 Signal: ${signal}
@@ -158,10 +157,13 @@ Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-⚠ Risk Warning Active
+⭐ Ultra Research Mode
 `;
 
         await bot.sendMessage(CHAT_ID,message);
+
+        lastSignalKey = `${PAIR.from}-${PAIR.to}-${signal}`;
+        signalToday++;
 
     }catch(err){
         console.log(err.message);
@@ -181,26 +183,27 @@ bot.onText(/\/start/, (msg)=>{
 bot.onText(/\/help/, (msg)=>{
 
     bot.sendMessage(msg.chat.id,
-`Commands:
+`ASH BOT GUIDE
 
-/start - Safety warning
-/help - Guide
+Signals are research filtered.
 
-Signals are sent automatically.
+Expect 0–1 signal/day.
+
+Risk management is required.
 `);
 });
 
 // =============================
-// Render Wake Endpoint
+// Server Endpoint
 // =============================
 
 app.get("/", async (req,res)=>{
     await scanMarket();
-    res.send("🔥 Ash Signal Bot Running");
+    res.send("🔥 Ash Bot V13 Running");
 });
 
 // =============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Bot Live");
+    console.log("Ash Bot V13 Live");
 });
