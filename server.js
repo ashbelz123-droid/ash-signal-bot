@@ -7,27 +7,28 @@ const TelegramBot = require("node-telegram-bot-api");
 const app = express();
 
 const PORT = process.env.PORT || 10000;
+
 const API_KEY = process.env.ALPHA_KEY;
 const TOKEN = process.env.TG_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 
-// ✅ Correct Telegram Bot Initialization
-const bot = new TelegramBot(TOKEN, {
-    polling: true
+// ✅ Telegram Bot Setup
+const bot = new TelegramBot(TOKEN,{
+    polling:true
 });
 
-// =============================
+// ===============================
 // Config
-// =============================
+// ===============================
 
 const PAIR = { from:"EUR", to:"USD" };
 
 let signalToday = 0;
 const MAX_SIGNAL_PER_DAY = 1;
 
-// =============================
+// ===============================
 // Utility Functions
-// =============================
+// ===============================
 
 function avg(arr){
     return arr.reduce((a,b)=>a+b,0)/arr.length;
@@ -37,25 +38,39 @@ function volatility(arr){
     return Math.max(...arr)-Math.min(...arr);
 }
 
-// =============================
-// Start Command
-// =============================
+// ===============================
+// Premium Message Template
+// ===============================
 
-bot.onText(/\/start/, (msg)=>{
-    bot.sendMessage(msg.chat.id,
-`🔥 AshBot Active
+function premiumTemplate(signal, entryLow, entryHigh, tp, sl, confidence){
 
-🏛 Institutional Research Signal Bot
+return `
+🏛 ASHBOT PREMIUM RESEARCH
 
-✅ Daily 1 strong signal
-✅ Risk control philosophy
+Pair: EUR/USD
+Bias: ${signal}
 
-Type /help`);
-});
+Entry Zone:
+${entryLow} — ${entryHigh}
 
-// =============================
+Take Profit:
+${tp.toFixed(5)}
+
+Stop Loss:
+${sl.toFixed(5)}
+
+Confidence Level:
+${confidence}% Institutional Filter
+
+⚠ Research signal only.
+Risk management required.
+`;
+
+}
+
+// ===============================
 // Market Scanner
-// =============================
+// ===============================
 
 async function scanMarket(){
 
@@ -124,25 +139,14 @@ async function scanMarket(){
         ).toFixed(0);
 
         const message =
-`🏛 ASHBOT INSTITUTIONAL SIGNAL
-
-Pair: EUR/USD
-Bias: ${signal}
-
-Entry Zone:
-${entryLow} — ${entryHigh}
-
-Take Profit:
-${tp.toFixed(5)}
-
-Stop Loss:
-${sl.toFixed(5)}
-
-Confidence: ${confidence}%
-
-⚠ Research signal only.
-Risk management required.
-`;
+        premiumTemplate(
+            signal,
+            entryLow,
+            entryHigh,
+            tp,
+            sl,
+            confidence
+        );
 
         await bot.sendMessage(CHAT_ID,message);
 
@@ -153,26 +157,42 @@ Risk management required.
     }
 }
 
-// =============================
-// Auto Scanner Engine
-// =============================
+// ===============================
+// Auto Engine
+// ===============================
 
 setInterval(()=>{
     scanMarket();
 }, 60 * 60 * 1000);
 
-// =============================
-// Server Route
-// =============================
+// ===============================
+// Telegram Commands
+// ===============================
 
-app.get("/",(req,res)=>{
-    res.send("🔥 AshBot Server Running");
+bot.onText(/\/start/, (msg)=>{
+    bot.sendMessage(msg.chat.id,
+`🔥 AshBot Premium Research Active
+
+Daily institutional signal service.
+
+Type /help`);
 });
 
-// =============================
-// Start Server
-// =============================
+bot.onText(/\/help/, (msg)=>{
+    bot.sendMessage(msg.chat.id,
+`Commands:
+/start
+/help
+
+Premium research signal bot.`);
+});
+
+// ===============================
+
+app.get("/",(req,res)=>{
+    res.send("🔥 AshBot Premium Server Running");
+});
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("🔥 AshBot Live on Port",PORT);
+    console.log("AshBot Live");
 });
