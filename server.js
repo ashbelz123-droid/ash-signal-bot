@@ -7,47 +7,62 @@ const TelegramBot = require("node-telegram-bot-api");
 const app = express();
 
 const PORT = process.env.PORT;
-
 const API_KEY = process.env.ALPHA_KEY;
-const CHAT_ID = process.env.CHAT_ID;
 const TOKEN = process.env.TG_TOKEN;
+const CHAT_ID = process.env.CHAT_ID;
 
 const bot = new TelegramBot(TOKEN);
 
 // =============================
-// Ultra Stability Memory Lock
+// Safety Warning Message
+// =============================
+
+const WARNING_MESSAGE =
+`⚠️ ASH SIGNAL BOT WARNING ⚠️
+
+This bot provides research forex signals.
+
+Risk exists in trading.
+No profit is guaranteed.
+
+Use risk management.
+
+Type /help for guide.
+`;
+
+// =============================
+// Memory Protection
 // =============================
 
 let lastSignalKey = "";
 let signalToday = 0;
-
 const MAX_SIGNAL_PER_DAY = 1;
 
 // =============================
-// Market Universe
+// Market Pair
 // =============================
 
 const PAIR = {
-    from: "EUR",
-    to: "USD"
+    from:"EUR",
+    to:"USD"
 };
 
 // =============================
-// Elite Probability Engine
+// Probability Engine
 // =============================
 
-function probabilityModel(current, sma, momentum, volatility, rsi) {
+function probabilityEngine(current,sma,momentum,volatility,rsi){
 
     let score = 60;
 
-    if (current > sma) score += 15;
-    if (momentum > 0) score += 10;
+    if(current > sma) score += 15;
+    if(momentum > 0) score += 10;
 
-    if (Math.abs(momentum) > volatility * 0.06)
+    if(Math.abs(momentum) > volatility*0.06)
         score += 10;
 
-    if (rsi < 30 || rsi > 70)
-        score += 15;
+    if(rsi < 30 || rsi > 70)
+        score += 10;
 
     return score;
 }
@@ -56,11 +71,11 @@ function probabilityModel(current, sma, momentum, volatility, rsi) {
 // Market Scanner
 // =============================
 
-async function scanMarket() {
+async function scanMarket(){
 
-    try {
+    try{
 
-        if (signalToday >= MAX_SIGNAL_PER_DAY)
+        if(signalToday >= MAX_SIGNAL_PER_DAY)
             return;
 
         const url =
@@ -71,17 +86,17 @@ async function scanMarket() {
         const dataset =
         response?.data?.["Time Series FX (Daily)"];
 
-        if (!dataset) return;
+        if(!dataset) return;
 
         const times = Object.keys(dataset);
 
-        if (times.length < 60) return;
+        if(times.length < 60) return;
 
         const prices = times.slice(0,80).map(t =>
             parseFloat(dataset[t]["4. close"])
-        ).filter(x => !isNaN(x));
+        ).filter(x=>!isNaN(x));
 
-        if (prices.length < 40) return;
+        if(prices.length < 40) return;
 
         const current = prices[0];
 
@@ -94,86 +109,98 @@ async function scanMarket() {
         Math.max(...prices) - Math.min(...prices);
 
         const rsi =
-        50 + (momentum / (volatility + 0.0001)) * 30;
+        50 + (momentum/(volatility+0.0001))*30;
 
         let signal = null;
 
-        if (
+        if(
             current > sma &&
-            momentum > volatility * 0.06 &&
+            momentum > volatility*0.06 &&
             rsi < 30
-        ) {
+        ){
             signal = "BUY 📈";
         }
 
-        if (
+        if(
             current < sma &&
-            momentum < -volatility * 0.06 &&
+            momentum < -volatility*0.06 &&
             rsi > 70
-        ) {
+        ){
             signal = "SELL 📉";
         }
 
-        if (!signal) return;
-
-        const signalKey =
-        `${PAIR.from}-${PAIR.to}-${signal}`;
-
-        if (signalKey === lastSignalKey)
-            return;
+        if(!signal) return;
 
         const probability =
-        probabilityModel(current, sma, momentum, volatility, rsi);
+        probabilityEngine(current,sma,momentum,volatility,rsi);
 
-        if (probability < 92) return; // VERY STRICT
+        if(probability < 92) return;
 
         const tp =
         signal.includes("BUY")
-        ? current + volatility * 0.7
-        : current - volatility * 0.7;
+        ? current + volatility*0.7
+        : current - volatility*0.7;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility * 0.35
-        : current + volatility * 0.35;
+        ? current - volatility*0.35
+        : current + volatility*0.35;
 
         const message =
-`🔥 ASH BOT V12 ULTRA STABILITY MODE 🔥
+`🔥 ASH SIGNAL BOT 🔥
 
 Pair: EUR/USD
-
 Signal: ${signal}
-Confidence Score: ${probability.toFixed(1)}%
+
+Confidence: ${probability.toFixed(1)}%
 
 Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-⚠ Ultra Strict Filter Active
-⭐ Maximum 1 Signal/Day
+⚠ Risk Warning Active
 `;
 
-        await bot.sendMessage(CHAT_ID, message);
+        await bot.sendMessage(CHAT_ID,message);
 
-        lastSignalKey = signalKey;
-        signalToday++;
-
-    } catch (err) {
+    }catch(err){
         console.log(err.message);
     }
 }
 
 // =============================
-// Render Endpoint
+// Telegram Commands
 // =============================
 
-app.get("/", async (req, res) => {
+bot.onText(/\/start/, (msg)=>{
+
+    bot.sendMessage(msg.chat.id, WARNING_MESSAGE);
+
+});
+
+bot.onText(/\/help/, (msg)=>{
+
+    bot.sendMessage(msg.chat.id,
+`Commands:
+
+/start - Safety warning
+/help - Guide
+
+Signals are sent automatically.
+`);
+});
+
+// =============================
+// Render Wake Endpoint
+// =============================
+
+app.get("/", async (req,res)=>{
     await scanMarket();
-    res.send("🔥 Ash Bot V12 Running");
+    res.send("🔥 Ash Signal Bot Running");
 });
 
 // =============================
 
-app.listen(PORT, "0.0.0.0", () => {
-    console.log("Ash Bot V12 Live");
+app.listen(PORT,"0.0.0.0",()=>{
+    console.log("Ash Bot Live");
 });
