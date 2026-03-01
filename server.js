@@ -15,13 +15,13 @@ const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
 // ==============================
-// Memory Protection System
+// Stability Memory System
 // ==============================
 
 let lastSignalKey = "";
-let dailySignalCounter = 0;
+let signalToday = 0;
 
-const MAX_DAILY_SIGNAL = 5;
+const MAX_SIGNAL_PER_DAY = 3;
 
 // ==============================
 // Trading Universe
@@ -33,31 +33,31 @@ const PAIRS = [
 ];
 
 // ==============================
-// Elite Probability Scoring
+// Stability Intelligence Engine
 // ==============================
 
-function probabilityScore(current,sma,momentum,volatility){
+function probabilityEngine(current,sma,momentum,volatility){
 
     let score = 50;
 
     if(current > sma) score += 15;
     if(momentum > 0) score += 15;
 
-    if(Math.abs(momentum) > volatility*0.03)
-        score += 10;
+    if(Math.abs(momentum) > volatility*0.04)
+        score += 12;
 
     return score;
 }
 
 // ==============================
-// Elite Signal Scanner
+// Strong Signal Scanner
 // ==============================
 
 async function analyzePair(pair){
 
     try{
 
-        if(dailySignalCounter >= MAX_DAILY_SIGNAL)
+        if(signalToday >= MAX_SIGNAL_PER_DAY)
             return;
 
         const url =
@@ -72,20 +72,20 @@ async function analyzePair(pair){
 
         const times = Object.keys(dataset);
 
-        if(times.length < 35) return;
+        if(times.length < 40) return;
 
-        const prices = times.slice(0,40).map(t =>
+        const prices = times.slice(0,50).map(t =>
             parseFloat(dataset[t]["4. close"])
         ).filter(x=>!isNaN(x));
 
-        if(prices.length < 20) return;
+        if(prices.length < 25) return;
 
         const current = prices[0];
 
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[5];
+        const momentum = current - prices[6];
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
@@ -94,14 +94,16 @@ async function analyzePair(pair){
 
         if(
             current > sma &&
-            momentum > volatility*0.03
+            momentum > volatility*0.04 &&
+            volatility > current*0.001
         ){
             signal = "BUY 📈";
         }
 
         if(
             current < sma &&
-            momentum < -volatility*0.03
+            momentum < -volatility*0.04 &&
+            volatility > current*0.001
         ){
             signal = "SELL 📉";
         }
@@ -114,39 +116,39 @@ async function analyzePair(pair){
         if(signalKey === lastSignalKey) return;
 
         const probability =
-        probabilityScore(current,sma,momentum,volatility);
+        probabilityEngine(current,sma,momentum,volatility);
 
-        if(probability < 78) return;
+        if(probability < 82) return;
 
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.45
-        : current - volatility*0.45;
+        ? current + volatility*0.5
+        : current - volatility*0.5;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.22
-        : current + volatility*0.22;
+        ? current - volatility*0.25
+        : current + volatility*0.25;
 
         const message =
-`🔥 ASH SIGNAL BOT V8 ELITE PRO 🔥
+`🔥 ASH SIGNAL BOT V9 STABILITY MODE 🔥
 
 Pair: ${pair.from}/${pair.to}
 
 Signal: ${signal}
-Probability Score: ${probability.toFixed(1)}%
+Confidence Probability: ${probability.toFixed(1)}%
 
 Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-Elite Research Mode Active 🤖
+Ultra Stable Mode Active ⭐
 `;
 
         await bot.sendMessage(CHAT_ID,message);
 
         lastSignalKey = signalKey;
-        dailySignalCounter++;
+        signalToday++;
 
     }catch(err){
         console.log(err.message);
@@ -154,7 +156,7 @@ Elite Research Mode Active 🤖
 }
 
 // ==============================
-// Render Endpoint
+// Render Wake Endpoint
 // ==============================
 
 app.get("/", async (req,res)=>{
@@ -165,7 +167,7 @@ app.get("/", async (req,res)=>{
             await analyzePair(pair);
         }
 
-        res.send("🔥 Ash Signal Bot V8 Elite Pro Running");
+        res.send("🔥 Ash Signal Bot V9 Stability Running");
 
     }catch(err){
         res.send("Bot Active");
@@ -178,5 +180,5 @@ app.get("/", async (req,res)=>{
 // ==============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V8 Live");
+    console.log("Ash Signal Bot V9 Live");
 });
