@@ -13,157 +13,135 @@ const CHAT_ID = process.env.CHAT_ID;
 
 const bot = new TelegramBot(TOKEN);
 
-// ==============================
-// Safety Warning
-// ==============================
-
-const WARNING_MESSAGE =
-`⚠ ASH BOT RISK NOTICE
-
-Forex trading contains risk.
-
-Signals are research filtered.
-
-No profit guarantee.
-
-Type /help for guide.
-`;
-
-// ==============================
-// Memory Lock System
-// ==============================
-
 let signalToday = 0;
-let lastSignalKey = "";
-
 const MAX_SIGNAL_PER_DAY = 1;
 
-// ==============================
-// Market Pair
-// ==============================
+const PAIR = { from: "EUR", to: "USD" };
 
-const PAIR = {
-    from:"EUR",
-    to:"USD"
-};
+// ============================
+// Utility Functions
+// ============================
 
-// ==============================
-// Institutional Research Model
-// ==============================
-
-function researchScore(current,sma,momentum,volatility,rsi){
-
-    let score = 65;
-
-    if(current > sma) score += 15;
-    if(momentum > 0) score += 10;
-
-    if(Math.abs(momentum) > volatility*0.08)
-        score += 10;
-
-    if(rsi < 30 || rsi > 70)
-        score += 10;
-
-    return score;
+function avg(arr){
+    return arr.reduce((a,b)=>a+b,0)/arr.length;
 }
 
-// ==============================
-// Market Scanner Engine
-// ==============================
+function vol(arr){
+    return Math.max(...arr) - Math.min(...arr);
+}
+
+function riskRewardValid(entry, sl, tp){
+    const risk = Math.abs(entry - sl);
+    const reward = Math.abs(tp - entry);
+    return (reward / risk) >= 2;
+}
+
+function sessionAllowed(){
+    const hour = new Date().getUTCHours();
+    // London 7–15 UTC
+    // New York 12–20 UTC
+    return (hour >= 7 && hour <= 20);
+}
+
+// ============================
+// Fetch Data
+// ============================
+
+async function fetchData(interval){
+
+    const url =
+    `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${PAIR.from}&to_symbol=${PAIR.to}&interval=${interval}&apikey=${API_KEY}`;
+
+    const response = await axios.get(url);
+
+    return response.data[`Time Series FX (${interval})`];
+}
+
+// ============================
+// Main Scanner
+// ============================
 
 async function scanMarket(){
 
+    if(signalToday >= MAX_SIGNAL_PER_DAY) return;
+    if(!sessionAllowed()) return;
+
     try{
 
-        if(signalToday >= MAX_SIGNAL_PER_DAY)
+        const data1H = await fetchData("60min");
+        const data4H = await fetchData("240min");
+
+        if(!data1H || !data4H) return;
+
+        const prices1H = Object.keys(data1H).slice(0,120)
+        .map(t=>parseFloat(data1H[t]["4. close"]));
+
+        const prices4H = Object.keys(data4H).slice(0,120)
+        .map(t=>parseFloat(data4H[t]["4. close"]));
+
+        if(prices1H.length < 50 || prices4H.length < 50)
             return;
 
-        const url =
-        `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${PAIR.from}&to_symbol=${PAIR.to}&apikey=${API_KEY}`;
+        const current = prices1H[0];
 
-        const response = await axios.get(url);
+        // 4H Bias
+        const sma4H = avg(prices4H);
+        const bias4H = current > sma4H ? "BUY" : "SELL";
 
-        const dataset =
-        response?.data?.["Time Series FX (Daily)"];
-
-        if(!dataset) return;
-
-        const times = Object.keys(dataset);
-
-        if(times.length < 100) return;
-
-        const prices = times.slice(0,120).map(t =>
-            parseFloat(dataset[t]["4. close"])
-        ).filter(x=>!isNaN(x));
-
-        if(prices.length < 60) return;
-
-        const current = prices[0];
-
-        const sma =
-        prices.reduce((a,b)=>a+b,0)/prices.length;
-
-        const momentum = current - prices[15];
-
-        const volatility =
-        Math.max(...prices) - Math.min(...prices);
-
-        const rsi =
-        50 + (momentum/(volatility+0.0001))*30;
+        // 1H Structure
+        const sma1H = avg(prices1H);
+        const momentum = current - prices1H[10];
+        const volatility = vol(prices1H);
 
         let signal = null;
 
-        if(
-            current > sma &&
-            momentum > volatility*0.08 &&
-            rsi < 30
-        ){
+        if(bias4H === "BUY" &&
+           current > sma1H &&
+           momentum > volatility*0.07){
+
             signal = "BUY 📈";
         }
 
-        if(
-            current < sma &&
-            momentum < -volatility*0.08 &&
-            rsi > 70
-        ){
+        if(bias4H === "SELL" &&
+           current < sma1H &&
+           momentum < -volatility*0.07){
+
             signal = "SELL 📉";
         }
 
         if(!signal) return;
 
-        const probability =
-        researchScore(current,sma,momentum,volatility,rsi);
-
-        if(probability < 95) return;
-
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.9
-        : current - volatility*0.9;
+        ? Math.max(...prices1H.slice(0,30))
+        : Math.min(...prices1H.slice(0,30));
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.45
-        : current + volatility*0.45;
+        ? current - volatility*0.4
+        : current + volatility*0.4;
+
+        if(!riskRewardValid(current, sl, tp))
+            return;
 
         const message =
-`🔥 ASH BOT FINAL LEGENDARY 🔥
+`🏛 ASHBOT V3 INSTITUTIONAL
 
 Pair: EUR/USD
-Signal: ${signal}
+4H Bias: ${bias4H}
+Session: Active
 
-Research Confidence: ${probability.toFixed(1)}%
+Signal: ${signal}
 
 Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-⭐ Ultra Rare Signal Mode Active
+RR ≥ 1:2
 `;
 
         await bot.sendMessage(CHAT_ID,message);
 
-        lastSignalKey = `${PAIR.from}-${PAIR.to}-${signal}`;
         signalToday++;
 
     }catch(err){
@@ -171,35 +149,21 @@ SL: ${sl.toFixed(5)}
     }
 }
 
-// ==============================
-// Telegram Commands
-// ==============================
+// ============================
 
 bot.onText(/\/start/, (msg)=>{
-    bot.sendMessage(msg.chat.id, WARNING_MESSAGE);
-});
-
-bot.onText(/\/help/, (msg)=>{
     bot.sendMessage(msg.chat.id,
-`ASH BOT GUIDE
+`⚠ Trading Risk Notice
 
-✔ Ultra strict filtering
-✔ Expect 0–1 signal/day
-✔ Risk management required
+This bot is a research assistant.
+No profit guarantee.
+Use proper risk management.
 `);
 });
 
-// ==============================
-// Server Endpoint
-// ==============================
-
 app.get("/", async (req,res)=>{
     await scanMarket();
-    res.send("🔥 Ash Bot Final Legendary Running");
+    res.send("AshBot V3 Institutional Running");
 });
 
-// ==============================
-
-app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Bot Final Live");
-});
+app.listen(PORT,"0.0.0.0");
