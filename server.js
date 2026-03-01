@@ -14,24 +14,37 @@ const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-// =========================
-// Signal Memory Lock System
-// =========================
+// =============================
+// GOD MODE MEMORY PROTECTION
+// =============================
 
-let lastSignal = "";
+let lastSignalHash = "";
 
-// =========================
+// =============================
 // Trading Pairs
-// =========================
+// =============================
 
 const PAIRS = [
     { from:"EUR", to:"USD" },
     { from:"GBP", to:"USD" }
 ];
 
-// =========================
-// Advanced Signal Engine
-// =========================
+// =============================
+// GOD MODE ENGINE
+// =============================
+
+function calculateScore(current, sma, momentum, volatility){
+
+    let score = 50;
+
+    if(current > sma) score += 15;
+    if(momentum > 0) score += 15;
+
+    if(Math.abs(momentum) > volatility*0.02)
+        score += 10;
+
+    return score;
+}
 
 async function analyzePair(pair){
 
@@ -42,77 +55,75 @@ async function analyzePair(pair){
 
         const response = await axios.get(url);
 
-        if(!response?.data) return;
-
-        const dataset = response.data["Time Series FX (Daily)"];
+        const dataset = response?.data?.["Time Series FX (Daily)"];
 
         if(!dataset) return;
 
         const times = Object.keys(dataset);
 
-        if(times.length < 20) return;
+        if(times.length < 25) return;
 
         const prices = times.slice(0,30).map(t =>
             parseFloat(dataset[t]["4. close"])
         ).filter(x=>!isNaN(x));
 
-        if(prices.length < 10) return;
+        if(prices.length < 12) return;
 
         const current = prices[0];
 
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[4];
+        const momentum = current - prices[3];
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
 
         let signal = null;
-        let confidence = 0;
 
-        if(current > sma && momentum > volatility*0.02){
+        if(current > sma && momentum > volatility*0.015)
             signal = "BUY 📈";
-            confidence = 75 + Math.random()*20;
-        }
 
-        if(current < sma && momentum < -volatility*0.02){
+        if(current < sma && momentum < -volatility*0.015)
             signal = "SELL 📉";
-            confidence = 75 + Math.random()*20;
-        }
 
         if(!signal) return;
 
-        const signalKey =
+        const hash =
         `${pair.from}-${pair.to}-${signal}`;
 
-        if(lastSignal === signalKey) return;
+        if(hash === lastSignalHash) return;
 
-        lastSignal = signalKey;
+        lastSignalHash = hash;
+
+        const score =
+        calculateScore(current,sma,momentum,volatility);
+
+        if(score < 65) return;
 
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.35
-        : current - volatility*0.35;
+        ? current + volatility*0.4
+        : current - volatility*0.4;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.18
-        : current + volatility*0.18;
+        ? current - volatility*0.2
+        : current + volatility*0.2;
 
         const message =
-`🔥 ASH SIGNAL BOT V3 ULTRA 🔥
+`🔥 ASH SIGNAL BOT V4 GOD MODE 🔥
 
 Pair: ${pair.from}/${pair.to}
 
 Signal: ${signal}
-Confidence: ${confidence.toFixed(1)}%
+Confidence Score: ${score.toFixed(1)}%
 
 Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-Advanced Filtering Active 🤖
+Ultra Filtering Engine Active 🤖
 `;
 
         await bot.sendMessage(CHAT_ID,message);
@@ -122,9 +133,9 @@ Advanced Filtering Active 🤖
     }
 }
 
-// =========================
+// =============================
 // Render Wake Endpoint
-// =========================
+// =============================
 
 app.get("/", async (req,res)=>{
 
@@ -134,7 +145,7 @@ app.get("/", async (req,res)=>{
             await analyzePair(pair);
         }
 
-        res.send("🔥 Ash Signal Bot V3 Running");
+        res.send("🔥 Ash Signal Bot V4 GOD MODE Running");
 
     }catch(err){
         res.send("Bot Active");
@@ -142,10 +153,10 @@ app.get("/", async (req,res)=>{
 
 });
 
-// =========================
+// =============================
 // Server Listener
-// =========================
+// =============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V3 Live");
+    console.log("Ash Signal Bot V4 GOD MODE Live");
 });
