@@ -14,37 +14,41 @@ const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-// =============================
-// GOD MODE MEMORY PROTECTION
-// =============================
+// ==============================
+// Signal Memory Protection
+// ==============================
 
-let lastSignalHash = "";
+let lastSignalKey = "";
 
-// =============================
-// Trading Pairs
-// =============================
+// ==============================
+// Trading Pair Universe
+// ==============================
 
 const PAIRS = [
     { from:"EUR", to:"USD" },
     { from:"GBP", to:"USD" }
 ];
 
-// =============================
-// GOD MODE ENGINE
-// =============================
+// ==============================
+// Statistical Helper Functions
+// ==============================
 
-function calculateScore(current, sma, momentum, volatility){
+function calculateTrendScore(current,sma,momentum,volatility){
 
     let score = 50;
 
     if(current > sma) score += 15;
     if(momentum > 0) score += 15;
 
-    if(Math.abs(momentum) > volatility*0.02)
+    if(Math.abs(momentum) > volatility*0.015)
         score += 10;
 
     return score;
 }
+
+// ==============================
+// Research Signal Engine
+// ==============================
 
 async function analyzePair(pair){
 
@@ -74,56 +78,56 @@ async function analyzePair(pair){
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[3];
+        const momentum = current - prices[4];
 
         const volatility =
         Math.max(...prices) - Math.min(...prices);
 
         let signal = null;
 
-        if(current > sma && momentum > volatility*0.015)
+        if(current > sma && momentum > volatility*0.02)
             signal = "BUY 📈";
 
-        if(current < sma && momentum < -volatility*0.015)
+        if(current < sma && momentum < -volatility*0.02)
             signal = "SELL 📉";
 
         if(!signal) return;
 
-        const hash =
+        const signalKey =
         `${pair.from}-${pair.to}-${signal}`;
 
-        if(hash === lastSignalHash) return;
+        if(signalKey === lastSignalKey) return;
 
-        lastSignalHash = hash;
+        lastSignalKey = signalKey;
 
-        const score =
-        calculateScore(current,sma,momentum,volatility);
+        const confidence =
+        calculateTrendScore(current,sma,momentum,volatility);
 
-        if(score < 65) return;
+        if(confidence < 65) return;
 
         const tp =
         signal.includes("BUY")
-        ? current + volatility*0.4
-        : current - volatility*0.4;
+        ? current + volatility*0.35
+        : current - volatility*0.35;
 
         const sl =
         signal.includes("BUY")
-        ? current - volatility*0.2
-        : current + volatility*0.2;
+        ? current - volatility*0.18
+        : current + volatility*0.18;
 
         const message =
-`🔥 ASH SIGNAL BOT V4 GOD MODE 🔥
+`🔥 ASH SIGNAL BOT V5 RESEARCH ENGINE 🔥
 
 Pair: ${pair.from}/${pair.to}
 
 Signal: ${signal}
-Confidence Score: ${score.toFixed(1)}%
+Confidence Score: ${confidence.toFixed(1)}%
 
 Entry: ${current.toFixed(5)}
 TP: ${tp.toFixed(5)}
 SL: ${sl.toFixed(5)}
 
-Ultra Filtering Engine Active 🤖
+Research Filtering Active 🤖
 `;
 
         await bot.sendMessage(CHAT_ID,message);
@@ -133,9 +137,9 @@ Ultra Filtering Engine Active 🤖
     }
 }
 
-// =============================
+// ==============================
 // Render Wake Endpoint
-// =============================
+// ==============================
 
 app.get("/", async (req,res)=>{
 
@@ -145,7 +149,7 @@ app.get("/", async (req,res)=>{
             await analyzePair(pair);
         }
 
-        res.send("🔥 Ash Signal Bot V4 GOD MODE Running");
+        res.send("🔥 Ash Signal Bot V5 Running");
 
     }catch(err){
         res.send("Bot Active");
@@ -153,10 +157,10 @@ app.get("/", async (req,res)=>{
 
 });
 
-// =============================
+// ==============================
 // Server Listener
-// =============================
+// ==============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V4 GOD MODE Live");
+    console.log("Ash Signal Bot V5 Live");
 });
