@@ -117,6 +117,15 @@ app.get("/", async (req,res)=>{
     }
 });
 
-app.listen(PORT,()=>{
-    console.log("Ash Signal Bot GOD AI Live");
+const express = require("express");
+const app = express();
+
+const PORT = process.env.PORT || 10000;
+
+app.get("/", (req, res) => {
+    res.send("🔥 Ash Signal Bot Running");
+});
+
+app.listen(PORT, () => {
+    console.log("Server running on port", PORT);
 });
