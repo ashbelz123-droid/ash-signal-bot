@@ -9,59 +9,56 @@ const app = express();
 const PORT = process.env.PORT;
 
 const API_KEY = process.env.ALPHA_KEY;
-const CHAT_ID = process.env.CHAT_ID;
 const TELEGRAM_TOKEN = process.env.TG_TOKEN;
 
 const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-// =============================
-// Institutional Memory System
-// =============================
+// ===============================
+// Admin Control
+// ===============================
 
-let lastSignalKey = "";
-let dailySignalCount = 0;
+const ADMIN_CHAT_ID = process.env.CHAT_ID;
 
-const MAX_DAILY_SIGNAL = 3;
+// Whitelist Users Database (Memory Storage)
+let whitelistUsers = [];
 
-// =============================
-// Market Universe
-// =============================
+// ===============================
+// User Management
+// ===============================
 
-const PAIRS = [
-    { from:"EUR", to:"USD" },
-    { from:"GBP", to:"USD" }
-];
-
-// =============================
-// Institutional Probability Model
-// =============================
-
-function institutionalScore(current,sma,momentum,volatility){
-
-    let score = 50;
-
-    if(current > sma) score += 15;
-    if(momentum > 0) score += 15;
-
-    if(Math.abs(momentum) > volatility*0.05)
-        score += 12;
-
-    return score;
+function addUser(userId){
+    if(!whitelistUsers.includes(userId)){
+        whitelistUsers.push(userId);
+    }
 }
 
-// =============================
-// Institutional Scanner Engine
-// =============================
+function removeUser(userId){
+    whitelistUsers =
+    whitelistUsers.filter(id => id !== userId);
+}
 
-async function analyzePair(pair){
+// ===============================
+// Signal Send Protection
+// ===============================
+
+async function sendSignal(userId,message){
+
+    if(!whitelistUsers.includes(userId))
+        return;
+
+    await bot.sendMessage(userId,message);
+}
+
+// ===============================
+// Signal Scanner Engine
+// ===============================
+
+async function scanMarket(){
 
     try{
 
-        if(dailySignalCount >= MAX_DAILY_SIGNAL)
-            return;
-
         const url =
-        `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=${pair.from}&to_symbol=${pair.to}&apikey=${API_KEY}`;
+        `https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=EUR&to_symbol=USD&apikey=${API_KEY}`;
 
         const response = await axios.get(url);
 
@@ -70,115 +67,92 @@ async function analyzePair(pair){
 
         if(!dataset) return;
 
-        const times = Object.keys(dataset);
+        const prices = Object.keys(dataset)
+        .slice(0,40)
+        .map(t=>parseFloat(dataset[t]["4. close"]))
+        .filter(x=>!isNaN(x));
 
-        if(times.length < 50) return;
-
-        const prices = times.slice(0,60).map(t =>
-            parseFloat(dataset[t]["4. close"])
-        ).filter(x=>!isNaN(x));
-
-        if(prices.length < 30) return;
+        if(prices.length < 20) return;
 
         const current = prices[0];
 
         const sma =
         prices.reduce((a,b)=>a+b,0)/prices.length;
 
-        const momentum = current - prices[8];
-
-        const volatility =
-        Math.max(...prices) - Math.min(...prices);
-
         let signal = null;
 
-        if(
-            current > sma &&
-            momentum > volatility*0.05 &&
-            volatility > current*0.001
-        ){
+        if(current > sma)
             signal = "BUY 📈";
-        }
 
-        if(
-            current < sma &&
-            momentum < -volatility*0.05 &&
-            volatility > current*0.001
-        ){
+        if(current < sma)
             signal = "SELL 📉";
-        }
 
         if(!signal) return;
 
-        const signalKey =
-        `${pair.from}-${pair.to}-${signal}`;
-
-        if(signalKey === lastSignalKey) return;
-
-        const probability =
-        institutionalScore(current,sma,momentum,volatility);
-
-        if(probability < 85) return;
-
-        const tp =
-        signal.includes("BUY")
-        ? current + volatility*0.55
-        : current - volatility*0.55;
-
-        const sl =
-        signal.includes("BUY")
-        ? current - volatility*0.28
-        : current + volatility*0.28;
-
         const message =
-`🔥 ASH SIGNAL BOT V10 INSTITUTIONAL 🔥
-
-Pair: ${pair.from}/${pair.to}
+`🔥 ASH SIGNAL BOT V11 PRO 🔥
 
 Signal: ${signal}
-Institutional Confidence: ${probability.toFixed(1)}%
-
 Entry: ${current.toFixed(5)}
-TP: ${tp.toFixed(5)}
-SL: ${sl.toFixed(5)}
 
-Institutional Research Mode ⭐
+Professional Filter Mode ⭐
 `;
 
-        await bot.sendMessage(CHAT_ID,message);
-
-        lastSignalKey = signalKey;
-        dailySignalCount++;
+        for(const user of whitelistUsers){
+            await sendSignal(user,message);
+        }
 
     }catch(err){
         console.log(err.message);
     }
 }
 
-// =============================
-// Render Endpoint
-// =============================
+// ===============================
+// Telegram Command Control
+// ===============================
+
+bot.onText(/\/add (\d+)/,(msg,match)=>{
+
+    const chatId = msg.chat.id;
+
+    if(chatId.toString() !== ADMIN_CHAT_ID) return;
+
+    const userId = parseInt(match[1]);
+
+    addUser(userId);
+
+    bot.sendMessage(chatId,"User Added ✅");
+});
+
+bot.onText(/\/remove (\d+)/,(msg,match)=>{
+
+    const chatId = msg.chat.id;
+
+    if(chatId.toString() !== ADMIN_CHAT_ID) return;
+
+    const userId = parseInt(match[1]);
+
+    removeUser(userId);
+
+    bot.sendMessage(chatId,"User Removed ❌");
+});
+
+// ===============================
+// Wake Endpoint (Render)
+// ===============================
 
 app.get("/", async (req,res)=>{
 
-    try{
+    await scanMarket();
 
-        for(const pair of PAIRS){
-            await analyzePair(pair);
-        }
-
-        res.send("🔥 Ash Signal Bot V10 Institutional Running");
-
-    }catch(err){
-        res.send("Bot Active");
-    }
+    res.send("🔥 Ash Signal Bot V11 Pro Running");
 
 });
 
-// =============================
+// ===============================
 // Server Listener
-// =============================
+// ===============================
 
 app.listen(PORT,"0.0.0.0",()=>{
-    console.log("Ash Signal Bot V10 Live");
+    console.log("Ash Signal Bot V11 Live");
 });
