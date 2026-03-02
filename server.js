@@ -5,22 +5,10 @@ import express from "express";
 
 dotenv.config();
 
-// ==============================
-// Environment Safety
-// ==============================
-
-if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error("Missing TELEGRAM_BOT_TOKEN");
-    process.exit(1);
-}
-
-if (!process.env.FOREX_API_KEY) {
-    console.error("Missing FOREX_API_KEY");
-    process.exit(1);
-}
+process.env.NTBA_FIX_350 = "1";
 
 // ==============================
-// Express Server
+// Server Setup
 // ==============================
 
 const app = express();
@@ -28,13 +16,13 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 
-// Health Endpoint
+// Health Check
 app.get("/", (req, res) => {
     res.send("🔥 AshBot Elite Community Running");
 });
 
 // ==============================
-// Telegram Bot Webhook Setup
+// Bot Setup (Webhook)
 // ==============================
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -46,39 +34,12 @@ app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
     res.sendStatus(200);
 });
 
+// Webhook Register
 if (process.env.RENDER_EXTERNAL_URL) {
     bot.setWebHook(
         `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`
     );
 }
-
-// ==============================
-// START COMMAND MESSAGE
-// ==============================
-
-bot.onText(/\/start/, async (msg) => {
-
-    const welcomeMessage = `
-🔥 Welcome to AshBot Free Signal Community
-
-📊 Pair: EURUSD
-⏰ Timeframe: 1 Hour Strategy
-
-📡 Signals are generated automatically when high probability setup appears.
-
-✅ Entry Price
-✅ Stop Loss
-✅ TP1 and TP2
-✅ Confidence Score
-
-⚠ Risk only 1–2% per trade.
-⚠ Research signal only.
-
-🇺🇬 Uganda Free Trading Community.
-`;
-
-    await bot.sendMessage(msg.chat.id, welcomeMessage);
-});
 
 // ==============================
 // RSI Calculator
@@ -105,7 +66,22 @@ function calculateRSI(prices, period = 14) {
 }
 
 // ==============================
-// Community Elite Signal Engine
+// Simple ADX Strength Approximation
+// ==============================
+
+function estimateADX(prices) {
+
+    let volatility = 0;
+
+    for (let i = 1; i < prices.length; i++) {
+        volatility += Math.abs(prices[i] - prices[i - 1]);
+    }
+
+    return Math.min(100, volatility * 10);
+}
+
+// ==============================
+// Signal Engine
 // ==============================
 
 async function communitySignalEngine() {
@@ -117,7 +93,6 @@ async function communitySignalEngine() {
         );
 
         const data = response.data["Time Series FX (60min)"];
-
         if (!data) return;
 
         const prices = Object.values(data)
@@ -130,13 +105,18 @@ async function communitySignalEngine() {
 
         const ma50 = prices.slice(-50).reduce((a,b)=>a+b,0)/50;
         const ma200 = prices.slice(-200).reduce((a,b)=>a+b,0)/200;
+
         const rsi = calculateRSI(prices);
+        const adx = estimateADX(prices);
 
         let score = 0;
 
-        if (last > ma50 && ma50 > ma200) score += 50;
-        if (last < ma50 && ma50 < ma200) score += 50;
-        if (rsi > 45 && rsi < 65) score += 40;
+        if (last > ma50 && ma50 > ma200) score += 40;
+        if (last < ma50 && ma50 < ma200) score += 40;
+
+        if (rsi > 45 && rsi < 65) score += 30;
+
+        if (adx > 30) score += 30;
 
         if (score < 90) return;
 
