@@ -1,222 +1,211 @@
-require("dotenv").config();
+import TelegramBot from "node-telegram-bot-api";
+import axios from "axios";
+import dotenv from "dotenv";
+import express from "express";
 
-const express = require("express");
-const axios = require("axios");
-const TelegramBot = require("node-telegram-bot-api");
+dotenv.config();
 
 const app = express();
+app.use(express.json());
 
-const PORT = process.env.PORT || 10000;
+// ==============================
+// Bot Setup
+// ==============================
 
-const API_KEY = process.env.ALPHA_KEY;
-const TOKEN = process.env.TG_TOKEN;
-const CHAT_ID = process.env.CHAT_ID;
-
-// Telegram Bot
-const bot = new TelegramBot(TOKEN,{
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{
     polling:true
 });
 
-// =============================
-// Config
-// =============================
+// ==============================
+// Channels
+// ==============================
 
-const PAIR = { from:"EUR", to:"USD" };
+const FREE_CHANNEL = "@Freeashsignalchanel";
+const PREMIUM_CHANNEL = "@YourPremiumChannel";
 
-let signalToday = 0;
-const MAX_SIGNAL_PER_DAY = 1;
+// ==============================
+// User Storage (Memory Only)
+// ==============================
 
-// =============================
-// Warning Message (Business Style)
-// =============================
+let freeUsers = new Set();
+let premiumUsers = new Set();
 
-function warningMessage(){
+let lastSignalDate = null;
 
-return `
-⚠ AshBot Research Signal Service
+// ==============================
+// Conservative Indicator Engine
+// ==============================
 
-✅ Free Community Signal
-💡 Premium Service Coming Later
+function calculateRSI(prices, period = 14){
 
-Trading contains risk.
-Use proper money management.
+    if(prices.length < period+1) return 50;
 
-Type /help for commands.
-`;
+    let gains = 0;
+    let losses = 0;
 
+    for(let i=prices.length-period;i<prices.length;i++){
+
+        let change = prices[i]-prices[i-1];
+
+        if(change > 0) gains += change;
+        else losses -= change;
+    }
+
+    let rs = (gains/period)/((losses/period)||1);
+
+    return 100 - (100/(1+rs));
 }
 
-// =============================
-// Premium Signal Template
-// =============================
+function volatilityFilter(prices){
 
-function premiumTemplate(signal, entryLow, entryHigh, tp, sl, confidence){
+    let max = Math.max(...prices);
+    let min = Math.min(...prices);
 
-return `
-🏛 ASHBOT INSTITUTIONAL RESEARCH
-
-Bias: ${signal}
-
-Entry Zone:
-${entryLow} — ${entryHigh}
-
-Take Profit:
-${tp.toFixed(5)}
-
-Stop Loss:
-${sl.toFixed(5)}
-
-Confidence: ${confidence}%
-
-⚠ Research signal only.
-No profit guarantee.
-`;
+    return (max-min) < (prices[prices.length-1]*0.02);
 }
 
-// =============================
-// Utility
-// =============================
+// ==============================
+// Signal Generator
+// ==============================
 
-function avg(arr){
-    return arr.reduce((a,b)=>a+b,0)/arr.length;
-}
-
-function volatility(arr){
-    return Math.max(...arr)-Math.min(...arr);
-}
-
-// =============================
-// Commands
-// =============================
-
-bot.onText(/\/start/, async(msg)=>{
-
-    await bot.sendMessage(
-        msg.chat.id,
-        warningMessage()
-    );
-
-});
-
-bot.onText(/\/help/, async(msg)=>{
-
-    await bot.sendMessage(
-        msg.chat.id,
-`
-Commands:
-
-/start
-/help
-
-AshBot Free Community Signal Service.
-`
-    );
-
-});
-
-// =============================
-// Market Scanner (1 Signal Per Day)
-// =============================
-
-async function scanMarket(){
-
-    if(signalToday >= MAX_SIGNAL_PER_DAY) return;
+async function generateSignal(){
 
     try{
 
-        const url =
-        `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${PAIR.from}&to_symbol=${PAIR.to}&interval=60min&apikey=${API_KEY}`;
+        const apiKey = process.env.FOREX_API_KEY;
 
-        const response = await axios.get(url);
-
-        const data =
-        response?.data?.["Time Series FX (60min)"];
-
-        if(!data) return;
-
-        const times = Object.keys(data);
-
-        if(times.length < 80) return;
-
-        const prices =
-        times.slice(0,100)
-        .map(t=>parseFloat(data[t]["4. close"]))
-        .filter(x=>!isNaN(x));
-
-        if(prices.length < 50) return;
-
-        const current = prices[0];
-
-        const sma = avg(prices);
-
-        const momentum = current - prices[10];
-
-        const vol = volatility(prices);
-
-        if(vol < 0.002 || vol > 0.02) return;
-
-        let signal = null;
-
-        if(current > sma && momentum > vol*0.07)
-            signal = "BUY 📈";
-
-        if(current < sma && momentum < -vol*0.07)
-            signal = "SELL 📉";
-
-        if(!signal) return;
-
-        const tp =
-        signal === "BUY"
-        ? Math.max(...prices.slice(0,30))
-        : Math.min(...prices.slice(0,30));
-
-        const sl =
-        signal === "BUY"
-        ? current - vol*0.4
-        : current + vol*0.4;
-
-        const entryLow = (current - vol*0.05).toFixed(5);
-        const entryHigh = (current + vol*0.05).toFixed(5);
-
-        const confidence =
-        Math.min(
-            100,
-            Math.abs(momentum)/(vol*0.1)*100
-        ).toFixed(0);
-
-        const message =
-        premiumTemplate(
-            signal,
-            entryLow,
-            entryHigh,
-            tp,
-            sl,
-            confidence
+        const res = await axios.get(
+        `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=60min&apikey=${apiKey}`
         );
 
-        await bot.sendMessage(CHAT_ID,message);
+        const data = res.data["Time Series FX (60min)"];
+        if(!data) return null;
 
-        signalToday++;
+        const prices = Object.values(data)
+        .map(v=>parseFloat(v["4. close"]))
+        .reverse();
+
+        if(prices.length < 150) return null;
+
+        const rsi = calculateRSI(prices);
+
+        if(rsi > 70 || rsi < 30) return null;
+        if(!volatilityFilter(prices)) return null;
+
+        let last = prices[prices.length-1];
+        let ma50 = prices.slice(-50).reduce((a,b)=>a+b,0)/50;
+        let ma200 = prices.slice(-200).reduce((a,b)=>a+b,0)/200;
+
+        if(last > ma50 && ma50 > ma200 && rsi > 50 && rsi < 65){
+            return {direction:"BUY", price:last};
+        }
+
+        if(last < ma50 && ma50 < ma200 && rsi < 50 && rsi > 35){
+            return {direction:"SELL", price:last};
+        }
+
+        return null;
 
     }catch(err){
-        console.log("Scan Error:",err.message);
+        console.log("Signal Error:",err.message);
+        return null;
     }
 }
 
-// =============================
-// Auto Scanner (1 Hour)
-// =============================
+// ==============================
+// Channel Sender
+// ==============================
 
-setInterval(()=>{
-    scanMarket();
-}, 60 * 60 * 1000);
+async function sendSignal(message, isPremium=false){
 
-// =============================
+    try{
 
-app.get("/",(req,res)=>{
-    res.send("🔥 AshBot Community Server Running");
+        await bot.sendMessage(FREE_CHANNEL,message);
+
+        if(isPremium){
+            await bot.sendMessage(PREMIUM_CHANNEL,message);
+        }
+
+    }catch(err){
+        console.log("Channel send error:",err.message);
+    }
+}
+
+// ==============================
+// Commands
+// ==============================
+
+bot.onText(/\/start/, async(msg)=>{
+
+    const chatId = msg.chat.id;
+
+    freeUsers.add(chatId);
+
+    const welcome =
+`
+🔥 AshBot Research Community
+
+✅ Free signal preview
+💡 Premium preview coming later
+
+Type /signal to check market.
+`;
+
+    await bot.sendMessage(chatId,welcome);
 });
 
-app.listen(PORT,"0.0.0.0",()=>{
+// ==============================
+// Signal Worker (1 Signal / Day)
+// ==============================
+
+async function signalWorker(){
+
+    let today = new Date().toDateString();
+
+    if(lastSignalDate === today) return;
+
+    const signal = await generateSignal();
+    if(!signal) return;
+
+    lastSignalDate = today;
+
+    const risk = 1;
+    const tp = 0.0005;
+    const sl = 0.00025;
+
+    const message =
+`
+🏛 ASHBOT RESEARCH PREVIEW
+
+Pair: EURUSD
+Direction: ${signal.direction}
+Entry: ${signal.price}
+
+TP: ${signal.price + tp}
+SL: ${signal.price - sl}
+
+Risk: ${risk}% per trade
+
+⚠ Research signal only.
+`;
+
+    await sendSignal(message,false);
+}
+
+// ==============================
+
+setInterval(()=>{
+    signalWorker();
+}, 5*60*1000);
+
+// ==============================
+
+const PORT = process.env.PORT || 3000;
+
+app.get("/",(req,res)=>{
+    res.send("🔥 AshBot Community Running");
+});
+
+app.listen(PORT,()=>{
     console.log("AshBot Live");
 });
