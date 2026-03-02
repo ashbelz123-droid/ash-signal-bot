@@ -1,5 +1,4 @@
 import TelegramBot from "node-telegram-bot-api";
-import axios from "axios";
 import dotenv from "dotenv";
 import express from "express";
 
@@ -8,7 +7,7 @@ dotenv.config();
 process.env.NTBA_FIX_350 = "1";
 
 // ==============================
-// Environment Safety
+// Environment Check
 // ==============================
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
@@ -16,183 +15,65 @@ if (!process.env.TELEGRAM_BOT_TOKEN) {
     process.exit(1);
 }
 
-if (!process.env.FOREX_API_KEY) {
-    console.error("Missing Forex API Key");
-    process.exit(1);
-}
-
 // ==============================
-// Express Server (Render Health Check)
+// Express Server
 // ==============================
 
 const app = express();
+app.use(express.json());
+
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-    res.send("🔥 AshBot Community Running");
-});
-
-app.listen(PORT, () => {
-    console.log("Server active");
-});
-
 // ==============================
-// Telegram Bot Setup
+// Bot Setup (Webhook Mode)
 // ==============================
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
-    polling: true
-});
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+
+// Webhook URL (Render Public URL REQUIRED)
+const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL;
+
+if (WEBHOOK_URL) {
+    bot.setWebHook(`${WEBHOOK_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`);
+}
+
+// ==============================
+// Channel
+// ==============================
 
 const CHANNEL = "@Freeashsignalchanel";
 
-let lastSignalTime = 0;
-
 // ==============================
-// Market Session Filter
-// London + New York Window
+// Signal Scheduler (1 Hour Scan)
 // ==============================
 
-function isActiveMarketSession() {
-    const hour = new Date().getUTCHours();
-    return hour >= 7 && hour <= 21;
-}
+setInterval(() => {
 
-// ==============================
-// RSI Calculator
-// ==============================
-
-function calculateRSI(prices, period = 14) {
-
-    if (prices.length < period + 1) return 50;
-
-    let gains = 0;
-    let losses = 0;
-
-    for (let i = prices.length - period; i < prices.length; i++) {
-
-        let change = prices[i] - prices[i - 1];
-
-        if (change > 0) gains += change;
-        else losses -= change;
-    }
-
-    let rs = (gains / period) / ((losses / period) || 1);
-
-    return 100 - (100 / (1 + rs));
-}
-
-// ==============================
-// Elite Signal Brain
-// ==============================
-
-function signalBrain(prices) {
-
-    const last = prices[prices.length - 1];
-
-    const ma50 =
-        prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
-
-    const ma200 =
-        prices.slice(-200).reduce((a, b) => a + b, 0) / 200;
-
-    const rsi = calculateRSI(prices);
-
-    let score = 0;
-
-    if (last > ma50 && ma50 > ma200) score += 45;
-    if (last < ma50 && ma50 < ma200) score += 45;
-
-    if (rsi > 48 && rsi < 62) score += 30;
-
-    if (Math.abs(last - ma50) / last < 0.015) score += 25;
-
-    return Math.min(score, 100);
-}
-
-// ==============================
-// Signal Generator
-// EURUSD ONLY
-// ==============================
-
-async function generateSignal() {
-
-    try {
-
-        if (!isActiveMarketSession()) return null;
-
-        const now = Date.now();
-
-        if (now - lastSignalTime < 24 * 60 * 60 * 1000)
-            return null;
-
-        const res = await axios.get(
-            `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=60min&apikey=${process.env.FOREX_API_KEY}`
-        );
-
-        const data = res.data["Time Series FX (60min)"];
-        if (!data) return null;
-
-        const prices = Object.values(data)
-            .map(v => parseFloat(v["4. close"]))
-            .reverse();
-
-        if (prices.length < 200) return null;
-
-        const score = signalBrain(prices);
-
-        if (score < 90) return null;
-
-        const last = prices[prices.length - 1];
-        const ma50 =
-            prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
-
-        lastSignalTime = now;
-
-        return {
-            direction: last > ma50 ? "BUY 📈" : "SELL 📉",
-            price: last.toFixed(5),
-            score
-        };
-
-    } catch (err) {
-        console.log(err.message);
-        return null;
-    }
-}
-
-// ==============================
-// Community Scheduler
-// 1 Signal Per Day
-// ==============================
-
-setInterval(async () => {
-
-    console.log("Community scan active");
-
-    const signal = await generateSignal();
-
-    if (!signal) return;
-
-    const message = `
-🔥 ASHBOT UGANDA FREE SIGNAL
-
-Pair: EURUSD
-Direction: ${signal.direction}
-Entry: ${signal.price}
-Confidence: ${signal.score}%
-
-⚠ Research signal only.
-Risk 1-3%.
-
-🇺🇬 Free community trading helper.
-`;
-
-    try {
-        await bot.sendMessage(CHANNEL, message);
-        console.log("Signal delivered");
-    } catch (err) {
-        console.log(err.message);
-    }
+    console.log("Community scan heartbeat");
 
 }, 60 * 60 * 1000);
+
+// ==============================
+// Express Bot Endpoint (Webhook Receiver)
+// ==============================
+
+app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
+
+    bot.processUpdate(req.body);
+
+    res.sendStatus(200);
+});
+
+// ==============================
+// Health Route
+// ==============================
+
+app.get("/", (req, res) => {
+    res.send("🔥 AshBot Community Running Webhook Mode");
+});
+
+// ==============================
+
+app.listen(PORT, () => {
+    console.log("Server running on port", PORT);
+});
