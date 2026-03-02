@@ -5,40 +5,55 @@ import express from "express";
 
 dotenv.config();
 
+// Prevent polling conflict
+process.env.NTBA_FIX_350 = "1";
+
 // ==============================
 // Environment Safety
 // ==============================
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error("❌ Telegram token missing");
+    console.error("Telegram token missing");
     process.exit(1);
 }
 
 if (!process.env.FOREX_API_KEY) {
-    console.error("❌ Forex API key missing");
+    console.error("Forex API key missing");
     process.exit(1);
 }
 
 // ==============================
+// Express Server (Render Required)
+// ==============================
 
 const app = express();
-app.use(express.json());
-
 const PORT = process.env.PORT || 3000;
 
+app.get("/", (req, res) => {
+    res.send("🔥 AshBot Community Running");
+});
+
+app.listen(PORT, () => {
+    console.log("Server running on port", PORT);
+});
+
 // ==============================
-// Bot Setup
+// Telegram Bot Setup
 // ==============================
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
-    polling: true
+    polling: {
+        autoStart: true
+    }
 });
 
 const FREE_CHANNEL = "@Freeashsignalchanel";
 
+let lastSignalTime = 0;
+
 // ==============================
-// Session Filter
-// London + New York window
+// Market Session Filter
+// London + New York Window
 // ==============================
 
 function isActiveMarketSession() {
@@ -58,6 +73,7 @@ function calculateRSI(prices, period = 14) {
     let losses = 0;
 
     for (let i = prices.length - period; i < prices.length; i++) {
+
         let change = prices[i] - prices[i - 1];
 
         if (change > 0) gains += change;
@@ -77,8 +93,11 @@ function signalBrain(prices) {
 
     const last = prices[prices.length - 1];
 
-    const ma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
-    const ma200 = prices.slice(-200).reduce((a, b) => a + b, 0) / 200;
+    const ma50 =
+        prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
+
+    const ma200 =
+        prices.slice(-200).reduce((a, b) => a + b, 0) / 200;
 
     const rsi = calculateRSI(prices);
 
@@ -96,10 +115,8 @@ function signalBrain(prices) {
 
 // ==============================
 // Signal Generator
-// EURUSD only
+// EURUSD ONLY
 // ==============================
-
-let lastSignalTime = 0;
 
 async function generateSignal() {
 
@@ -131,7 +148,8 @@ async function generateSignal() {
         if (score < 90) return null;
 
         const last = prices[prices.length - 1];
-        const ma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
+        const ma50 =
+            prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
 
         lastSignalTime = now;
 
@@ -148,19 +166,8 @@ async function generateSignal() {
 }
 
 // ==============================
-// Channel Sender
-// ==============================
-
-async function sendSignal(message) {
-    try {
-        await bot.sendMessage(FREE_CHANNEL, message);
-    } catch (err) {
-        console.log(err.message);
-    }
-}
-
-// ==============================
-// Auto Community Signal Loop
+// Community Signal Scheduler
+// 1 Signal Per Day
 // ==============================
 
 setInterval(async () => {
@@ -185,16 +192,11 @@ Risk 1-3%.
 🇺🇬 Free community trading helper.
 `;
 
-    sendSignal(message);
+    try {
+        await bot.sendMessage(FREE_CHANNEL, message);
+        console.log("✅ Signal sent");
+    } catch (err) {
+        console.log(err.message);
+    }
 
 }, 60 * 60 * 1000);
-
-// ==============================
-
-app.get("/", (req, res) => {
-    res.send("🔥 AshBot Community Running");
-});
-
-app.listen(PORT, () => {
-    console.log("✅ Server running");
-});
