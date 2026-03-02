@@ -24,7 +24,7 @@ const FREE_CHANNEL = "@Freeashsignalchanel";
 const PREMIUM_CHANNEL = "@YourPremiumChannel";
 
 // ==============================
-// User Storage (Memory Only)
+// Memory Storage
 // ==============================
 
 let freeUsers = new Set();
@@ -66,6 +66,7 @@ function volatilityFilter(prices){
 
 // ==============================
 // Signal Generator
+// Rare Conservative Setup
 // ==============================
 
 async function generateSignal(){
@@ -116,7 +117,7 @@ async function generateSignal(){
 // Channel Sender
 // ==============================
 
-async function sendSignal(message, isPremium=false){
+async function sendSignal(message,isPremium=false){
 
     try{
 
@@ -135,43 +136,36 @@ async function sendSignal(message, isPremium=false){
 // Commands
 // ==============================
 
-bot.onText(/\/start/, async(msg)=>{
+bot.onText(/\/start/,async(msg)=>{
 
-    const chatId = msg.chat.id;
-
-    freeUsers.add(chatId);
+    freeUsers.add(msg.chat.id);
 
     const welcome =
 `
-🔥 AshBot Research Community
+🔥 AshBot Community Research
 
-✅ Free signal preview
-💡 Premium preview coming later
+✅ Rare high-quality signal philosophy
+💡 1 strong setup/day
 
 Type /signal to check market.
 `;
 
-    await bot.sendMessage(chatId,welcome);
+    await bot.sendMessage(msg.chat.id,welcome);
 });
 
 // ==============================
-// Signal Worker (1 Signal / Day)
+// Signal Command
 // ==============================
 
-async function signalWorker(){
-
-    let today = new Date().toDateString();
-
-    if(lastSignalDate === today) return;
+bot.onText(/\/signal/,async(msg)=>{
 
     const signal = await generateSignal();
-    if(!signal) return;
 
-    lastSignalDate = today;
-
-    const risk = 1;
-    const tp = 0.0005;
-    const sl = 0.00025;
+    if(!signal){
+        bot.sendMessage(msg.chat.id,
+        "⏳ No strong conservative setup.");
+        return;
+    }
 
     const message =
 `
@@ -181,22 +175,48 @@ Pair: EURUSD
 Direction: ${signal.direction}
 Entry: ${signal.price}
 
-TP: ${signal.price + tp}
-SL: ${signal.price - sl}
-
-Risk: ${risk}% per trade
-
 ⚠ Research signal only.
+Risk 1% per trade.
+`;
+
+    await sendSignal(message,false);
+
+});
+
+// ==============================
+// Daily Worker (Rare Signal Philosophy)
+// ==============================
+
+let lastWorkerDate = null;
+
+async function signalWorker(){
+
+    let today = new Date().toDateString();
+
+    if(lastWorkerDate === today) return;
+
+    const signal = await generateSignal();
+
+    if(!signal) return;
+
+    lastWorkerDate = today;
+
+    const message =
+`
+🔥 ASHBOT AUTO RESEARCH SIGNAL
+
+Pair: EURUSD
+Direction: ${signal.direction}
+Entry: ${signal.price}
+
+⚠ Conservative setup.
 `;
 
     await sendSignal(message,false);
 }
 
-// ==============================
-
-setInterval(()=>{
-    signalWorker();
-}, 5*60*1000);
+// Run every 5 minutes
+setInterval(signalWorker,300000);
 
 // ==============================
 
