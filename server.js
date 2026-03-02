@@ -6,21 +6,19 @@ import express from "express";
 dotenv.config();
 
 // ==============================
-// Environment Safety Check
+// Environment Safety
 // ==============================
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error("❌ TELEGRAM_BOT_TOKEN is missing in Render Environment Variables.");
+    console.error("❌ Telegram token missing");
     process.exit(1);
 }
 
 if (!process.env.FOREX_API_KEY) {
-    console.error("❌ FOREX_API_KEY is missing in Render Environment Variables.");
+    console.error("❌ Forex API key missing");
     process.exit(1);
 }
 
-// ==============================
-// Express Setup (Render Required)
 // ==============================
 
 const app = express();
@@ -28,41 +26,32 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-    res.send("🔥 AshBot V16 Elite Running");
-});
-
-app.listen(PORT, () => {
-    console.log("✅ Express server running on port", PORT);
-});
-
 // ==============================
-// Telegram Bot Setup
+// Bot Setup
 // ==============================
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     polling: true
 });
 
-console.log("✅ Telegram bot polling started");
-
-// Channel
 const FREE_CHANNEL = "@Freeashsignalchanel";
 
 // ==============================
-// Market Session Intelligence
+// Session Filter
+// London + New York window
 // ==============================
 
 function isActiveMarketSession() {
-    const utcHour = new Date().getUTCHours();
-    return utcHour >= 7 && utcHour <= 21; // London + NY
+    const hour = new Date().getUTCHours();
+    return hour >= 7 && hour <= 21;
 }
 
 // ==============================
-// RSI Engine
+// RSI Calculator
 // ==============================
 
 function calculateRSI(prices, period = 14) {
+
     if (prices.length < period + 1) return 50;
 
     let gains = 0;
@@ -70,14 +59,13 @@ function calculateRSI(prices, period = 14) {
 
     for (let i = prices.length - period; i < prices.length; i++) {
         let change = prices[i] - prices[i - 1];
+
         if (change > 0) gains += change;
         else losses -= change;
     }
 
-    let avgGain = gains / period;
-    let avgLoss = losses / period || 1;
+    let rs = (gains / period) / ((losses / period) || 1);
 
-    let rs = avgGain / avgLoss;
     return 100 - (100 / (1 + rs));
 }
 
@@ -86,6 +74,7 @@ function calculateRSI(prices, period = 14) {
 // ==============================
 
 function signalBrain(prices) {
+
     const last = prices[prices.length - 1];
 
     const ma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
@@ -95,42 +84,41 @@ function signalBrain(prices) {
 
     let score = 0;
 
-    // Trend alignment
-    if (last > ma50 && ma50 > ma200) score += 40;
-    if (last < ma50 && ma50 < ma200) score += 40;
+    if (last > ma50 && ma50 > ma200) score += 45;
+    if (last < ma50 && ma50 < ma200) score += 45;
 
-    // Healthy RSI zone
-    if (rsi > 45 && rsi < 65) score += 30;
+    if (rsi > 48 && rsi < 62) score += 30;
 
-    // Pullback zone
-    if (Math.abs(last - ma50) / last < 0.015) score += 30;
+    if (Math.abs(last - ma50) / last < 0.015) score += 25;
 
     return Math.min(score, 100);
 }
 
 // ==============================
 // Signal Generator
+// EURUSD only
 // ==============================
 
 let lastSignalTime = 0;
 
 async function generateSignal() {
+
     try {
+
         if (!isActiveMarketSession()) return null;
 
-        // Prevent spam (1 signal per hour max)
         const now = Date.now();
-        if (now - lastSignalTime < 60 * 60 * 1000) return null;
+
+        // 1 signal per day
+        if (now - lastSignalTime < 24 * 60 * 60 * 1000)
+            return null;
 
         const res = await axios.get(
             `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=60min&apikey=${process.env.FOREX_API_KEY}`
         );
 
         const data = res.data["Time Series FX (60min)"];
-        if (!data) {
-            console.log("AlphaVantage limit or no data.");
-            return null;
-        }
+        if (!data) return null;
 
         const prices = Object.values(data)
             .map(v => parseFloat(v["4. close"]))
@@ -139,7 +127,8 @@ async function generateSignal() {
         if (prices.length < 200) return null;
 
         const score = signalBrain(prices);
-        if (score < 88) return null;
+
+        if (score < 90) return null;
 
         const last = prices[prices.length - 1];
         const ma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
@@ -153,63 +142,59 @@ async function generateSignal() {
         };
 
     } catch (err) {
-        console.error("Signal generation error:", err.message);
+        console.log(err.message);
         return null;
     }
 }
 
 // ==============================
-// Safety Message
+// Channel Sender
 // ==============================
 
-function tradingSafetyMessage() {
-    return `
-⚠ Research Signal Only
-No guaranteed profit.
-Risk 1% – 3% per trade.
-Use personal judgment.
-`;
+async function sendSignal(message) {
+    try {
+        await bot.sendMessage(FREE_CHANNEL, message);
+    } catch (err) {
+        console.log(err.message);
+    }
 }
 
 // ==============================
-// Commands
+// Auto Community Signal Loop
 // ==============================
 
-bot.onText(/\/start/, async (msg) => {
-    await bot.sendMessage(msg.chat.id, `
-🔥 AshBot V16 Elite Research Engine
+setInterval(async () => {
 
-🌍 London + NY session intelligence
-📊 Rare high-quality signals only
-
-Type /signal
-`);
-});
-
-bot.onText(/\/signal/, async (msg) => {
+    console.log("🌍 Community scan running");
 
     const signal = await generateSignal();
 
-    if (!signal) {
-        await bot.sendMessage(msg.chat.id,
-            "⏳ No strong elite setup right now.");
-        return;
-    }
+    if (!signal) return;
 
     const message = `
-🏛 ASHBOT V16 ELITE SIGNAL
+🔥 ASHBOT UGANDA FREE SIGNAL
 
+Pair: EURUSD
 Direction: ${signal.direction}
 Entry: ${signal.price}
 Confidence: ${signal.score}%
 
-${tradingSafetyMessage()}
+⚠ Research signal only.
+Risk 1-3%.
+
+🇺🇬 Free community trading helper.
 `;
 
-    try {
-        await bot.sendMessage(FREE_CHANNEL, message);
-        await bot.sendMessage(msg.chat.id, "✅ Signal sent to channel.");
-    } catch (err) {
-        console.error("Telegram send error:", err.message);
-    }
+    sendSignal(message);
+
+}, 60 * 60 * 1000);
+
+// ==============================
+
+app.get("/", (req, res) => {
+    res.send("🔥 AshBot Community Running");
+});
+
+app.listen(PORT, () => {
+    console.log("✅ Server running");
 });
