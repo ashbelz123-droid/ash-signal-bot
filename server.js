@@ -16,7 +16,7 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{
     polling:true
 });
 
-// Channel
+// Channels
 const FREE_CHANNEL = "@Freeashsignalchanel";
 
 // ============================
@@ -27,12 +27,16 @@ function isActiveMarketSession(){
 
     let utcHour = new Date().getUTCHours();
 
-    // High liquidity window (conceptual)
-    return utcHour >= 13 && utcHour <= 21;
+    // London + New York session window
+    if(utcHour >= 7 && utcHour <= 21){
+        return true;
+    }
+
+    return false;
 }
 
 // ============================
-// Psychological Market Brain
+// Indicator Brain
 // ============================
 
 function calculateRSI(prices, period = 14){
@@ -56,7 +60,7 @@ function calculateRSI(prices, period = 14){
 }
 
 // ============================
-// Signal Brain Core
+// Signal Brain
 // ============================
 
 function signalBrain(prices){
@@ -71,22 +75,16 @@ function signalBrain(prices){
 
     let rsi = calculateRSI(prices);
 
-    let trendScore = 0;
-    let momentumScore = 0;
-    let psychologyScore = 0;
+    let score = 0;
 
-    // Trend structure
-    if(last > ma50 && ma50 > ma200) trendScore = 35;
-    if(last < ma50 && ma50 < ma200) trendScore = 35;
+    if(last > ma50 && ma50 > ma200) score += 40;
+    if(last < ma50 && ma50 < ma200) score += 40;
 
-    // Momentum health
-    if(rsi > 40 && rsi < 65) momentumScore = 35;
+    if(rsi > 40 && rsi < 65) score += 40;
 
-    // Psychological stability filter
-    if(Math.abs(last-ma50)/last < 0.02)
-        psychologyScore = 40;
+    if(Math.abs(last-ma50)/last < 0.02) score += 30;
 
-    return trendScore + momentumScore + psychologyScore;
+    return score;
 }
 
 // ============================
@@ -157,10 +155,10 @@ bot.onText(/\/start/,async(msg)=>{
 
     await bot.sendMessage(msg.chat.id,
 `
-🔥 AshBot V11 Psychological Engine
+🔥 AshBot V13 Ultra Research Engine
 
-🌍 Rare high quality research signals
-📊 Reputation safe design
+🌍 London + New York session intelligence
+📊 Very rare high quality setups
 
 Type /signal
 `);
@@ -172,13 +170,13 @@ bot.onText(/\/signal/,async(msg)=>{
 
     if(!signal){
         bot.sendMessage(msg.chat.id,
-        "⏳ No strong psychological setup.");
+        "⏳ No strong global setup.");
         return;
     }
 
     const message =
 `
-🏛 ASHBOT V11 SIGNAL
+🏛 ASHBOT V13 SIGNAL
 
 Direction: ${signal.direction}
 Entry: ${signal.price}
@@ -223,9 +221,9 @@ Confidence Score: ${signal.score}%
 const PORT = process.env.PORT || 3000;
 
 app.get("/",(req,res)=>{
-    res.send("🔥 AshBot V11 Running");
+    res.send("🔥 AshBot V13 Running");
 });
 
 app.listen(PORT,()=>{
-    console.log("AshBot V11 Live");
+    console.log("AshBot V13 Live");
 });
