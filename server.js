@@ -5,16 +5,46 @@ import express from "express";
 
 dotenv.config();
 
+// ==============================
+// Environment Safety Check
+// ==============================
+
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.error("❌ TELEGRAM_BOT_TOKEN is missing in Render Environment Variables.");
+    process.exit(1);
+}
+
+if (!process.env.FOREX_API_KEY) {
+    console.error("❌ FOREX_API_KEY is missing in Render Environment Variables.");
+    process.exit(1);
+}
+
+// ==============================
+// Express Setup (Render Required)
+// ==============================
+
 const app = express();
 app.use(express.json());
 
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+    res.send("🔥 AshBot V16 Elite Running");
+});
+
+app.listen(PORT, () => {
+    console.log("✅ Express server running on port", PORT);
+});
+
 // ==============================
-// Bot Setup
+// Telegram Bot Setup
 // ==============================
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{
-    polling:true
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
+    polling: true
 });
+
+console.log("✅ Telegram bot polling started");
 
 // Channel
 const FREE_CHANNEL = "@Freeashsignalchanel";
@@ -23,109 +53,107 @@ const FREE_CHANNEL = "@Freeashsignalchanel";
 // Market Session Intelligence
 // ==============================
 
-function isActiveMarketSession(){
-
-    let utcHour = new Date().getUTCHours();
-
-    // London + New York liquidity window
-    return utcHour >= 7 && utcHour <= 21;
+function isActiveMarketSession() {
+    const utcHour = new Date().getUTCHours();
+    return utcHour >= 7 && utcHour <= 21; // London + NY
 }
 
 // ==============================
 // RSI Engine
 // ==============================
 
-function calculateRSI(prices, period = 14){
-
-    if(prices.length < period+1) return 50;
+function calculateRSI(prices, period = 14) {
+    if (prices.length < period + 1) return 50;
 
     let gains = 0;
     let losses = 0;
 
-    for(let i=prices.length-period;i<prices.length;i++){
-
-        let change = prices[i]-prices[i-1];
-
-        if(change > 0) gains += change;
+    for (let i = prices.length - period; i < prices.length; i++) {
+        let change = prices[i] - prices[i - 1];
+        if (change > 0) gains += change;
         else losses -= change;
     }
 
-    let rs = (gains/period)/((losses/period)||1);
+    let avgGain = gains / period;
+    let avgLoss = losses / period || 1;
 
-    return 100 - (100/(1+rs));
+    let rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
 }
 
 // ==============================
-// Psychological Market Brain
+// Elite Signal Brain
 // ==============================
 
-function signalBrain(prices){
+function signalBrain(prices) {
+    const last = prices[prices.length - 1];
 
-    let last = prices[prices.length-1];
+    const ma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
+    const ma200 = prices.slice(-200).reduce((a, b) => a + b, 0) / 200;
 
-    let ma50 =
-    prices.slice(-50).reduce((a,b)=>a+b,0)/50;
-
-    let ma200 =
-    prices.slice(-200).reduce((a,b)=>a+b,0)/200;
-
-    let rsi = calculateRSI(prices);
+    const rsi = calculateRSI(prices);
 
     let score = 0;
 
-    if(last > ma50 && ma50 > ma200) score += 40;
-    if(last < ma50 && ma50 < ma200) score += 40;
+    // Trend alignment
+    if (last > ma50 && ma50 > ma200) score += 40;
+    if (last < ma50 && ma50 < ma200) score += 40;
 
-    if(rsi > 40 && rsi < 65) score += 40;
+    // Healthy RSI zone
+    if (rsi > 45 && rsi < 65) score += 30;
 
-    if(Math.abs(last-ma50)/last < 0.02) score += 30;
+    // Pullback zone
+    if (Math.abs(last - ma50) / last < 0.015) score += 30;
 
-    return Math.min(100,score);
+    return Math.min(score, 100);
 }
 
 // ==============================
 // Signal Generator
 // ==============================
 
-async function generateSignal(){
+let lastSignalTime = 0;
 
-    try{
+async function generateSignal() {
+    try {
+        if (!isActiveMarketSession()) return null;
 
-        if(!isActiveMarketSession()) return null;
-
-        const apiKey = process.env.FOREX_API_KEY;
+        // Prevent spam (1 signal per hour max)
+        const now = Date.now();
+        if (now - lastSignalTime < 60 * 60 * 1000) return null;
 
         const res = await axios.get(
-        `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=60min&apikey=${apiKey}`
+            `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=60min&apikey=${process.env.FOREX_API_KEY}`
         );
 
         const data = res.data["Time Series FX (60min)"];
-        if(!data) return null;
+        if (!data) {
+            console.log("AlphaVantage limit or no data.");
+            return null;
+        }
 
-        const prices =
-        Object.values(data)
-        .map(v=>parseFloat(v["4. close"]))
-        .reverse();
+        const prices = Object.values(data)
+            .map(v => parseFloat(v["4. close"]))
+            .reverse();
 
-        if(prices.length < 150) return null;
+        if (prices.length < 200) return null;
 
-        let score = signalBrain(prices);
+        const score = signalBrain(prices);
+        if (score < 88) return null;
 
-        if(score < 88) return null;
+        const last = prices[prices.length - 1];
+        const ma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
 
-        let last = prices[prices.length-1];
-
-        let ma50 =
-        prices.slice(-50).reduce((a,b)=>a+b,0)/50;
+        lastSignalTime = now;
 
         return {
             direction: last > ma50 ? "BUY 📈" : "SELL 📉",
-            price:last,
+            price: last.toFixed(5),
             score
         };
 
-    }catch(err){
-        console.log(err.message);
+    } catch (err) {
+        console.error("Signal generation error:", err.message);
         return null;
     }
 }
@@ -134,81 +162,54 @@ async function generateSignal(){
 // Safety Message
 // ==============================
 
-function tradingSafetyMessage(){
-
-return `
-⚠ Research Signal Assistant
-
-🔥 No guaranteed profit.
-👉 Risk only 1% – 3%.
-
-Use personal trading judgment.
+function tradingSafetyMessage() {
+    return `
+⚠ Research Signal Only
+No guaranteed profit.
+Risk 1% – 3% per trade.
+Use personal judgment.
 `;
-}
-
-// ==============================
-// Channel Sender
-// ==============================
-
-async function sendSignal(message){
-
-    try{
-        await bot.sendMessage(FREE_CHANNEL,message);
-    }catch(err){
-        console.log(err.message);
-    }
 }
 
 // ==============================
 // Commands
 // ==============================
 
-bot.onText(/\/start/,async(msg)=>{
+bot.onText(/\/start/, async (msg) => {
+    await bot.sendMessage(msg.chat.id, `
+🔥 AshBot V16 Elite Research Engine
 
-    await bot.sendMessage(msg.chat.id,
-`
-🔥 AshBot V15 Elite Research Engine
-
-🌍 Global session intelligence
-📊 Ultra rare high quality signals
+🌍 London + NY session intelligence
+📊 Rare high-quality signals only
 
 Type /signal
 `);
 });
 
-bot.onText(/\/signal/,async(msg)=>{
+bot.onText(/\/signal/, async (msg) => {
 
     const signal = await generateSignal();
 
-    if(!signal){
-        bot.sendMessage(msg.chat.id,
-        "⏳ No strong elite setup.");
+    if (!signal) {
+        await bot.sendMessage(msg.chat.id,
+            "⏳ No strong elite setup right now.");
         return;
     }
 
-    const message =
-`
-🏛 ASHBOT V15 ELITE SIGNAL
+    const message = `
+🏛 ASHBOT V16 ELITE SIGNAL
 
 Direction: ${signal.direction}
 Entry: ${signal.price}
-
-Confidence Score: ${signal.score}%
+Confidence: ${signal.score}%
 
 ${tradingSafetyMessage()}
 `;
 
-    await sendSignal(message);
-});
-
-// ==============================
-
-const PORT = process.env.PORT || 3000;
-
-app.get("/",(req,res)=>{
-    res.send("🔥 AshBot V15 Running");
-});
-
-app.listen(PORT,()=>{
-    console.log("AshBot V15 Live");
+    try {
+        await bot.sendMessage(FREE_CHANNEL, message);
+        await bot.sendMessage(msg.chat.id, "✅ Signal sent to channel.");
+    } catch (err) {
+        console.error("Telegram send error:", err.message);
+    }
 });
