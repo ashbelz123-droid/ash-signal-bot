@@ -8,32 +8,32 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-// =============================
+// ============================
 // Bot Setup
-// =============================
+// ============================
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{
     polling:true
 });
 
-// Channels
+// Channel
 const FREE_CHANNEL = "@Freeashsignalchanel";
 
-// =============================
-// Market Session Control
-// =============================
+// ============================
+// Market Session Intelligence
+// ============================
 
-function isNewYorkSession(){
+function isActiveMarketSession(){
 
-    let hour = new Date().getUTCHours();
+    let utcHour = new Date().getUTCHours();
 
-    // New York market active approx 13:00 – 21:00 UTC
-    return hour >= 13 && hour <= 21;
+    // High liquidity window (conceptual)
+    return utcHour >= 13 && utcHour <= 21;
 }
 
-// =============================
-// Indicator Brain
-// =============================
+// ============================
+// Psychological Market Brain
+// ============================
 
 function calculateRSI(prices, period = 14){
 
@@ -55,9 +55,11 @@ function calculateRSI(prices, period = 14){
     return 100 - (100/(1+rs));
 }
 
-function signalBrain(prices){
+// ============================
+// Signal Brain Core
+// ============================
 
-    let rsi = calculateRSI(prices);
+function signalBrain(prices){
 
     let last = prices[prices.length-1];
 
@@ -67,27 +69,35 @@ function signalBrain(prices){
     let ma200 =
     prices.slice(-200).reduce((a,b)=>a+b,0)/200;
 
+    let rsi = calculateRSI(prices);
+
     let trendScore = 0;
+    let momentumScore = 0;
+    let psychologyScore = 0;
 
-    if(last > ma50 && ma50 > ma200) trendScore = 40;
-    if(last < ma50 && ma50 < ma200) trendScore = 40;
+    // Trend structure
+    if(last > ma50 && ma50 > ma200) trendScore = 35;
+    if(last < ma50 && ma50 < ma200) trendScore = 35;
 
-    let rsiScore = 0;
+    // Momentum health
+    if(rsi > 40 && rsi < 65) momentumScore = 35;
 
-    if(rsi > 40 && rsi < 65) rsiScore = 40;
+    // Psychological stability filter
+    if(Math.abs(last-ma50)/last < 0.02)
+        psychologyScore = 40;
 
-    return trendScore + rsiScore;
+    return trendScore + momentumScore + psychologyScore;
 }
 
-// =============================
+// ============================
 // Signal Generator
-// =============================
+// ============================
 
 async function generateSignal(){
 
     try{
 
-        if(!isNewYorkSession()) return null;
+        if(!isActiveMarketSession()) return null;
 
         const apiKey = process.env.FOREX_API_KEY;
 
@@ -107,7 +117,7 @@ async function generateSignal(){
 
         let score = signalBrain(prices);
 
-        if(score < 80) return null;
+        if(score < 85) return null;
 
         let last = prices[prices.length-1];
 
@@ -126,9 +136,9 @@ async function generateSignal(){
     }
 }
 
-// =============================
+// ============================
 // Channel Sender
-// =============================
+// ============================
 
 async function sendSignal(message){
 
@@ -139,18 +149,18 @@ async function sendSignal(message){
     }
 }
 
-// =============================
+// ============================
 // Commands
-// =============================
+// ============================
 
 bot.onText(/\/start/,async(msg)=>{
 
     await bot.sendMessage(msg.chat.id,
 `
-🔥 AshBot V10 Global Research
+🔥 AshBot V11 Psychological Engine
 
-🌍 New York session intelligence
-📊 Rare high quality signals
+🌍 Rare high quality research signals
+📊 Reputation safe design
 
 Type /signal
 `);
@@ -162,13 +172,13 @@ bot.onText(/\/signal/,async(msg)=>{
 
     if(!signal){
         bot.sendMessage(msg.chat.id,
-        "⏳ No strong global research setup.");
+        "⏳ No strong psychological setup.");
         return;
     }
 
     const message =
 `
-🏛 ASHBOT V10 GLOBAL SIGNAL
+🏛 ASHBOT V11 SIGNAL
 
 Direction: ${signal.direction}
 Entry: ${signal.price}
@@ -182,9 +192,9 @@ Risk 1%.
     await sendSignal(message);
 });
 
-// =============================
+// ============================
 // Worker Engine
-// =============================
+// ============================
 
 setInterval(async()=>{
 
@@ -194,7 +204,7 @@ setInterval(async()=>{
 
     const message =
 `
-🔥 ASHBOT AUTO GLOBAL SIGNAL
+🔥 ASHBOT AUTO SIGNAL
 
 Direction: ${signal.direction}
 Entry: ${signal.price}
@@ -208,14 +218,14 @@ Confidence Score: ${signal.score}%
 
 },300000);
 
-// =============================
+// ============================
 
 const PORT = process.env.PORT || 3000;
 
 app.get("/",(req,res)=>{
-    res.send("🔥 AshBot V10 Global Running");
+    res.send("🔥 AshBot V11 Running");
 });
 
 app.listen(PORT,()=>{
-    console.log("AshBot V10 Live");
+    console.log("AshBot V11 Live");
 });
