@@ -5,7 +5,19 @@ import express from "express";
 
 dotenv.config();
 
-process.env.NTBA_FIX_350 = "1";
+// ==============================
+// Environment Safety
+// ==============================
+
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.error("Missing TELEGRAM_BOT_TOKEN");
+    process.exit(1);
+}
+
+if (!process.env.FOREX_API_KEY) {
+    console.error("Missing FOREX_API_KEY");
+    process.exit(1);
+}
 
 // ==============================
 // Server Setup
@@ -16,29 +28,51 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 
-// Health Check
+// Health Endpoint
 app.get("/", (req, res) => {
-    res.send("🔥 AshBot Elite Community Running");
+    res.send("🔥 AshBot Community Running");
 });
 
 // ==============================
-// Bot Setup (Webhook)
+// Bot Setup (Webhook Mode)
 // ==============================
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
 
 const CHANNEL = "@Freeashsignalchanel";
 
+// Webhook Endpoint
 app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-// Webhook Register
+// Register Webhook
 if (process.env.RENDER_EXTERNAL_URL) {
     bot.setWebHook(
         `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`
     );
+}
+
+// ==============================
+// Performance Tracking (Lifetime)
+// ==============================
+
+let totalTrades = 0;
+let wins = 0;
+let losses = 0;
+
+// ==============================
+// Market Session Filter (UTC)
+// ==============================
+
+function isLiquiditySession() {
+
+    const utcHour = new Date().getUTCHours();
+
+    // London + New York Liquidity Window
+    return (utcHour >= 7 && utcHour <= 10) ||
+           (utcHour >= 13 && utcHour <= 17);
 }
 
 // ==============================
@@ -66,27 +100,61 @@ function calculateRSI(prices, period = 14) {
 }
 
 // ==============================
-// Simple ADX Strength Approximation
+// Performance Command
 // ==============================
 
-function estimateADX(prices) {
+bot.onText(/\/performance/, async (msg) => {
 
-    let volatility = 0;
+    const winRate = totalTrades === 0
+        ? 0
+        : ((wins / totalTrades) * 100).toFixed(2);
 
-    for (let i = 1; i < prices.length; i++) {
-        volatility += Math.abs(prices[i] - prices[i - 1]);
-    }
+    const text = `
+📊 AshBot Lifetime Performance
 
-    return Math.min(100, volatility * 10);
-}
+Total Trades: ${totalTrades}
+Wins: ${wins}
+Losses: ${losses}
+
+Win Rate: ${winRate}%
+`;
+
+    await bot.sendMessage(msg.chat.id, text);
+});
 
 // ==============================
-// Signal Engine
+// Start Command
+// ==============================
+
+bot.onText(/\/start/, async (msg) => {
+
+    const welcome = `
+🔥 Welcome to AshBot Free Community
+
+Pair: EURUSD
+Timeframe: 1H Strategy
+
+Signals are sent only inside:
+🌍 London & New York liquidity windows
+
+Use:
+/performance → View lifetime stats
+
+⚠ Risk 1–2% per trade.
+`;
+
+    await bot.sendMessage(msg.chat.id, welcome);
+});
+
+// ==============================
+// Elite Signal Engine
 // ==============================
 
 async function communitySignalEngine() {
 
     try {
+
+        if (!isLiquiditySession()) return;
 
         const response = await axios.get(
             `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=60min&apikey=${process.env.FOREX_API_KEY}`
@@ -107,16 +175,12 @@ async function communitySignalEngine() {
         const ma200 = prices.slice(-200).reduce((a,b)=>a+b,0)/200;
 
         const rsi = calculateRSI(prices);
-        const adx = estimateADX(prices);
 
         let score = 0;
 
-        if (last > ma50 && ma50 > ma200) score += 40;
-        if (last < ma50 && ma50 < ma200) score += 40;
-
-        if (rsi > 45 && rsi < 65) score += 30;
-
-        if (adx > 30) score += 30;
+        if (last > ma50 && ma50 > ma200) score += 50;
+        if (last < ma50 && ma50 < ma200) score += 50;
+        if (rsi > 45 && rsi < 65) score += 40;
 
         if (score < 90) return;
 
@@ -135,6 +199,8 @@ async function communitySignalEngine() {
         const tp2 = direction === "BUY 📈"
             ? entry + entry * 0.01
             : entry - entry * 0.01;
+
+        totalTrades++;
 
         const message = `
 🔥 ASHBOT ELITE SIGNAL
@@ -164,7 +230,7 @@ RR ≈ 1:2
 }
 
 // ==============================
-// Scheduler
+// Scheduler (1 Hour Scan)
 // ==============================
 
 setInterval(communitySignalEngine, 60 * 60 * 1000);
@@ -174,5 +240,5 @@ setInterval(communitySignalEngine, 60 * 60 * 1000);
 // ==============================
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log("🔥 AshBot Elite Running");
+    console.log("🔥 AshBot Production Running");
 });
