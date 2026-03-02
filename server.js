@@ -21,7 +21,7 @@ const FREE_CHANNEL = "@Freeashsignalchanel";
 const PREMIUM_CHANNEL = "@YourPremiumChannel";
 
 // ============================
-// Indicator Brain Engine
+// Advanced Brain Engine
 // ============================
 
 function calculateRSI(prices, period = 14){
@@ -44,15 +44,20 @@ function calculateRSI(prices, period = 14){
     return 100 - (100/(1+rs));
 }
 
-function volatilityFilter(prices){
+function volatilityScore(prices){
 
     let max = Math.max(...prices);
     let min = Math.min(...prices);
 
-    return (max-min) < (prices[prices.length-1]*0.02);
+    let volatility = (max-min)/prices[prices.length-1];
+
+    if(volatility < 0.01) return 40;
+    if(volatility < 0.02) return 60;
+
+    return 30;
 }
 
-function signalScore(prices){
+function trendScore(prices){
 
     let last = prices[prices.length-1];
 
@@ -62,20 +67,25 @@ function signalScore(prices){
     let ma200 =
     prices.slice(-200).reduce((a,b)=>a+b,0)/200;
 
+    let score = 0;
+
+    if(last > ma50 && ma50 > ma200) score += 35;
+    if(last < ma50 && ma50 < ma200) score += 35;
+
+    return score;
+}
+
+function signalBrain(prices){
+
     let rsi = calculateRSI(prices);
 
-    let trendScore = 0;
-    let momentumScore = 0;
-    let healthScore = 0;
+    let score =
+    volatilityScore(prices)
+    + trendScore(prices);
 
-    if(last > ma50 && ma50 > ma200) trendScore = 30;
-    if(last < ma50 && ma50 < ma200) trendScore = 30;
+    if(rsi > 65 || rsi < 35) score -= 20;
 
-    if(rsi > 40 && rsi < 65) momentumScore = 30;
-
-    if(volatilityFilter(prices)) healthScore = 40;
-
-    return trendScore + momentumScore + healthScore;
+    return Math.min(100,score);
 }
 
 // ============================
@@ -102,9 +112,9 @@ async function generateSignal(){
 
         if(prices.length < 150) return null;
 
-        let score = signalScore(prices);
+        let score = signalBrain(prices);
 
-        if(score < 70) return null;
+        if(score < 75) return null;
 
         let last = prices[prices.length-1];
 
@@ -121,7 +131,7 @@ async function generateSignal(){
         };
 
     }catch(err){
-        console.log("Signal Error:",err.message);
+        console.log(err.message);
         return null;
     }
 }
@@ -130,18 +140,14 @@ async function generateSignal(){
 // Channel Sender
 // ============================
 
-async function sendSignal(message,isPremium=false){
+async function sendSignal(message){
 
     try{
 
         await bot.sendMessage(FREE_CHANNEL,message);
 
-        if(isPremium){
-            await bot.sendMessage(PREMIUM_CHANNEL,message);
-        }
-
     }catch(err){
-        console.log("Channel send error:",err.message);
+        console.log("Send error:",err.message);
     }
 }
 
@@ -151,17 +157,15 @@ async function sendSignal(message,isPremium=false){
 
 bot.onText(/\/start/,async(msg)=>{
 
-    const welcome =
+    await bot.sendMessage(msg.chat.id,
 `
-🔥 AshBot V8 Research Engine
+🔥 AshBot V9 Elite Research
 
-✅ Conservative signal philosophy
-📊 Rare high quality setups
+✅ Rare high quality setups
+📊 Reputation safe philosophy
 
 Type /signal
-`;
-
-    await bot.sendMessage(msg.chat.id,welcome);
+`);
 });
 
 bot.onText(/\/signal/,async(msg)=>{
@@ -176,7 +180,7 @@ bot.onText(/\/signal/,async(msg)=>{
 
     const message =
 `
-🏛 ASHBOT V8 RESEARCH PREVIEW
+🏛 ASHBOT V9 ELITE SIGNAL
 
 Direction: ${signal.direction}
 Entry: ${signal.price}
@@ -184,14 +188,14 @@ Entry: ${signal.price}
 Confidence Score: ${signal.score}%
 
 ⚠ Research signal only.
-Risk 1% recommended.
+Risk 1%.
 `;
 
-    await sendSignal(message,false);
+    await sendSignal(message);
 });
 
 // ============================
-// Worker Engine (Rare Signal Philosophy)
+// Worker Engine
 // ============================
 
 let lastWorkerDate = null;
@@ -210,7 +214,7 @@ async function signalWorker(){
 
     const message =
 `
-🔥 ASHBOT AUTO SIGNAL
+🔥 ASHBOT AUTO ELITE SIGNAL
 
 Direction: ${signal.direction}
 Entry: ${signal.price}
@@ -220,7 +224,7 @@ Confidence Score: ${signal.score}%
 ⚠ Community research signal.
 `;
 
-    await sendSignal(message,false);
+    await sendSignal(message);
 }
 
 setInterval(signalWorker,300000);
@@ -230,9 +234,9 @@ setInterval(signalWorker,300000);
 const PORT = process.env.PORT || 3000;
 
 app.get("/",(req,res)=>{
-    res.send("🔥 AshBot V8 Live");
+    res.send("🔥 AshBot V9 Elite Running");
 });
 
 app.listen(PORT,()=>{
-    console.log("AshBot V8 Running");
+    console.log("AshBot V9 Live");
 });
