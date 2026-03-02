@@ -5,19 +5,7 @@ import express from "express";
 
 dotenv.config();
 
-// ==============================
-// Environment Safety
-// ==============================
-
-if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error("Missing TELEGRAM_BOT_TOKEN");
-    process.exit(1);
-}
-
-if (!process.env.FOREX_API_KEY) {
-    console.error("Missing FOREX_API_KEY");
-    process.exit(1);
-}
+process.env.NTBA_FIX_350 = "1";
 
 // ==============================
 // Server Setup
@@ -30,7 +18,7 @@ const PORT = process.env.PORT || 10000;
 
 // Health Endpoint
 app.get("/", (req, res) => {
-    res.send("🔥 AshBot Community Running");
+    res.send("🔥 AshBot Community Brand Running");
 });
 
 // ==============================
@@ -47,7 +35,7 @@ app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
     res.sendStatus(200);
 });
 
-// Register Webhook
+// Webhook Register
 if (process.env.RENDER_EXTERNAL_URL) {
     bot.setWebHook(
         `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`
@@ -55,28 +43,33 @@ if (process.env.RENDER_EXTERNAL_URL) {
 }
 
 // ==============================
-// Performance Tracking (Lifetime)
+// Heartbeat Anti-Sleep System
 // ==============================
 
-let totalTrades = 0;
-let wins = 0;
-let losses = 0;
+setInterval(async () => {
+    try {
+        if (!process.env.RENDER_EXTERNAL_URL) return;
+        await axios.get(process.env.RENDER_EXTERNAL_URL);
+        console.log("🔥 Anti-sleep heartbeat active");
+    } catch (err) {
+        console.log("Heartbeat error");
+    }
+}, 5 * 60 * 1000);
 
 // ==============================
-// Market Session Filter (UTC)
+// Liquidity Session Filter
 // ==============================
 
 function isLiquiditySession() {
 
     const utcHour = new Date().getUTCHours();
 
-    // London + New York Liquidity Window
     return (utcHour >= 7 && utcHour <= 10) ||
            (utcHour >= 13 && utcHour <= 17);
 }
 
 // ==============================
-// RSI Calculator
+// RSI Logic
 // ==============================
 
 function calculateRSI(prices, period = 14) {
@@ -100,8 +93,35 @@ function calculateRSI(prices, period = 14) {
 }
 
 // ==============================
-// Performance Command
+// Start Command Brand Message
 // ==============================
+
+bot.onText(/\/start/, async (msg) => {
+
+    const text = `
+🔥 ASHBOT FREE COMMUNITY
+
+📊 Pair: EURUSD
+⏰ Strategy: 1 Hour Trend System
+
+🌍 Signals appear only inside:
+London & New York liquidity windows.
+
+⚠ Risk only 1–2% per trade.
+
+Use /performance to check stats.
+`;
+
+    await bot.sendMessage(msg.chat.id, text);
+});
+
+// ==============================
+// Performance Tracker
+// ==============================
+
+let totalTrades = 0;
+let wins = 0;
+let losses = 0;
 
 bot.onText(/\/performance/, async (msg) => {
 
@@ -110,9 +130,9 @@ bot.onText(/\/performance/, async (msg) => {
         : ((wins / totalTrades) * 100).toFixed(2);
 
     const text = `
-📊 AshBot Lifetime Performance
+📊 Lifetime Performance
 
-Total Trades: ${totalTrades}
+Trades: ${totalTrades}
 Wins: ${wins}
 Losses: ${losses}
 
@@ -123,31 +143,7 @@ Win Rate: ${winRate}%
 });
 
 // ==============================
-// Start Command
-// ==============================
-
-bot.onText(/\/start/, async (msg) => {
-
-    const welcome = `
-🔥 Welcome to AshBot Free Community
-
-Pair: EURUSD
-Timeframe: 1H Strategy
-
-Signals are sent only inside:
-🌍 London & New York liquidity windows
-
-Use:
-/performance → View lifetime stats
-
-⚠ Risk 1–2% per trade.
-`;
-
-    await bot.sendMessage(msg.chat.id, welcome);
-});
-
-// ==============================
-// Elite Signal Engine
+// Signal Engine
 // ==============================
 
 async function communitySignalEngine() {
@@ -217,7 +213,6 @@ SL: ${sl.toFixed(5)}
 Confidence: ${score}%
 
 Risk: 1–2%
-RR ≈ 1:2
 
 ⚠ Free community signal.
 `;
@@ -230,7 +225,7 @@ RR ≈ 1:2
 }
 
 // ==============================
-// Scheduler (1 Hour Scan)
+// Scheduler
 // ==============================
 
 setInterval(communitySignalEngine, 60 * 60 * 1000);
@@ -240,5 +235,5 @@ setInterval(communitySignalEngine, 60 * 60 * 1000);
 // ==============================
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log("🔥 AshBot Production Running");
+    console.log("🔥 AshBot Brand Running");
 });
