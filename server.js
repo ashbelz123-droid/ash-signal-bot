@@ -5,7 +5,6 @@ import express from "express";
 
 dotenv.config();
 
-// Prevent polling conflict
 process.env.NTBA_FIX_350 = "1";
 
 // ==============================
@@ -13,17 +12,17 @@ process.env.NTBA_FIX_350 = "1";
 // ==============================
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error("Telegram token missing");
+    console.error("Missing Telegram Token");
     process.exit(1);
 }
 
 if (!process.env.FOREX_API_KEY) {
-    console.error("Forex API key missing");
+    console.error("Missing Forex API Key");
     process.exit(1);
 }
 
 // ==============================
-// Express Server (Render Required)
+// Express Server (Render Health Check)
 // ==============================
 
 const app = express();
@@ -34,7 +33,7 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log("Server running on port", PORT);
+    console.log("Server active");
 });
 
 // ==============================
@@ -42,12 +41,10 @@ app.listen(PORT, () => {
 // ==============================
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
-    polling: {
-        autoStart: true
-    }
+    polling: true
 });
 
-const FREE_CHANNEL = "@Freeashsignalchanel";
+const CHANNEL = "@Freeashsignalchanel";
 
 let lastSignalTime = 0;
 
@@ -126,7 +123,6 @@ async function generateSignal() {
 
         const now = Date.now();
 
-        // 1 signal per day
         if (now - lastSignalTime < 24 * 60 * 60 * 1000)
             return null;
 
@@ -166,13 +162,13 @@ async function generateSignal() {
 }
 
 // ==============================
-// Community Signal Scheduler
+// Community Scheduler
 // 1 Signal Per Day
 // ==============================
 
 setInterval(async () => {
 
-    console.log("🌍 Community scan running");
+    console.log("Community scan active");
 
     const signal = await generateSignal();
 
@@ -193,8 +189,8 @@ Risk 1-3%.
 `;
 
     try {
-        await bot.sendMessage(FREE_CHANNEL, message);
-        console.log("✅ Signal sent");
+        await bot.sendMessage(CHANNEL, message);
+        console.log("Signal delivered");
     } catch (err) {
         console.log(err.message);
     }
