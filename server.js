@@ -21,18 +21,18 @@ const FREE_CHANNEL = "@Freeashsignalchanel";
 
 // ==============================
 // Market Session Intelligence
-// London + New York liquidity window
 // ==============================
 
 function isActiveMarketSession(){
 
     let utcHour = new Date().getUTCHours();
 
+    // London + New York liquidity window
     return utcHour >= 7 && utcHour <= 21;
 }
 
 // ==============================
-// Indicator Brain Engine
+// RSI Engine
 // ==============================
 
 function calculateRSI(prices, period = 14){
@@ -80,7 +80,7 @@ function signalBrain(prices){
 
     if(Math.abs(last-ma50)/last < 0.02) score += 30;
 
-    return score;
+    return Math.min(100,score);
 }
 
 // ==============================
@@ -111,7 +111,7 @@ async function generateSignal(){
 
         let score = signalBrain(prices);
 
-        if(score < 85) return null;
+        if(score < 88) return null;
 
         let last = prices[prices.length-1];
 
@@ -131,23 +131,18 @@ async function generateSignal(){
 }
 
 // ==============================
-// Safety Warning Engine
+// Safety Message
 // ==============================
 
 function tradingSafetyMessage(){
 
 return `
-⚠ ASHBOT RESEARCH DISCLAIMER
+⚠ Research Signal Assistant
 
-🔥 Signals are research suggestions only.
-❌ No guaranteed win rate.
+🔥 No guaranteed profit.
+👉 Risk only 1% – 3%.
 
-Risk philosophy:
-👉 Use 1% – 3% capital risk.
-
-Trade using personal judgment.
-
-Stay safe.
+Use personal trading judgment.
 `;
 }
 
@@ -172,10 +167,10 @@ bot.onText(/\/start/,async(msg)=>{
 
     await bot.sendMessage(msg.chat.id,
 `
-🔥 AshBot V14 Global Research Engine
+🔥 AshBot V15 Elite Research Engine
 
-🌍 London + New York session intelligence
-📊 Rare high quality conservative signals
+🌍 Global session intelligence
+📊 Ultra rare high quality signals
 
 Type /signal
 `);
@@ -187,13 +182,13 @@ bot.onText(/\/signal/,async(msg)=>{
 
     if(!signal){
         bot.sendMessage(msg.chat.id,
-        "⏳ No strong research setup.");
+        "⏳ No strong elite setup.");
         return;
     }
 
     const message =
 `
-🏛 ASHBOT V14 SIGNAL
+🏛 ASHBOT V15 ELITE SIGNAL
 
 Direction: ${signal.direction}
 Entry: ${signal.price}
@@ -205,42 +200,15 @@ ${tradingSafetyMessage()}
 
     await sendSignal(message);
 });
-
-// ==============================
-// Worker Engine
-// Rare signal philosophy
-// ==============================
-
-setInterval(async()=>{
-
-    const signal = await generateSignal();
-
-    if(!signal) return;
-
-    const message =
-`
-🔥 ASHBOT AUTO SIGNAL
-
-Direction: ${signal.direction}
-Entry: ${signal.price}
-
-Confidence Score: ${signal.score}%
-
-${tradingSafetyMessage()}
-`;
-
-    await sendSignal(message);
-
-},300000);
 
 // ==============================
 
 const PORT = process.env.PORT || 3000;
 
 app.get("/",(req,res)=>{
-    res.send("🔥 AshBot V14 Running");
+    res.send("🔥 AshBot V15 Running");
 });
 
 app.listen(PORT,()=>{
-    console.log("AshBot V14 Live");
+    console.log("AshBot V15 Live");
 });
