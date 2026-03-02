@@ -5,19 +5,17 @@ import express from "express";
 
 dotenv.config();
 
-process.env.NTBA_FIX_350 = "1";
-
 // ==============================
-// Environment Check
+// Environment Safety
 // ==============================
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error("Missing Telegram Token");
+    console.error("Missing TELEGRAM_BOT_TOKEN");
     process.exit(1);
 }
 
 if (!process.env.FOREX_API_KEY) {
-    console.error("Missing Forex API Key");
+    console.error("Missing FOREX_API_KEY");
     process.exit(1);
 }
 
@@ -43,13 +41,11 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
 
 const CHANNEL = "@Freeashsignalchanel";
 
-// Webhook Endpoint
 app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-// Register Webhook
 if (process.env.RENDER_EXTERNAL_URL) {
     bot.setWebHook(
         `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`
@@ -57,15 +53,35 @@ if (process.env.RENDER_EXTERNAL_URL) {
 }
 
 // ==============================
-// Performance Tracking (Lifetime)
+// START COMMAND MESSAGE
 // ==============================
 
-let totalTrades = 0;
-let wins = 0;
-let losses = 0;
+bot.onText(/\/start/, async (msg) => {
+
+    const welcomeMessage = `
+🔥 Welcome to AshBot Free Signal Community
+
+📊 Pair: EURUSD
+⏰ Timeframe: 1 Hour Strategy
+
+📡 Signals are generated automatically when high probability setup appears.
+
+✅ Entry Price
+✅ Stop Loss
+✅ TP1 and TP2
+✅ Confidence Score
+
+⚠ Risk only 1–2% per trade.
+⚠ Research signal only.
+
+🇺🇬 Uganda Free Trading Community.
+`;
+
+    await bot.sendMessage(msg.chat.id, welcomeMessage);
+});
 
 // ==============================
-// RSI Calculation
+// RSI Calculator
 // ==============================
 
 function calculateRSI(prices, period = 14) {
@@ -76,6 +92,7 @@ function calculateRSI(prices, period = 14) {
     let losses = 0;
 
     for (let i = prices.length - period; i < prices.length; i++) {
+
         let diff = prices[i] - prices[i - 1];
 
         if (diff > 0) gains += diff;
@@ -88,10 +105,10 @@ function calculateRSI(prices, period = 14) {
 }
 
 // ==============================
-// Elite Signal Engine
+// Community Elite Signal Engine
 // ==============================
 
-async function generateSignal() {
+async function communitySignalEngine() {
 
     try {
 
@@ -100,13 +117,14 @@ async function generateSignal() {
         );
 
         const data = response.data["Time Series FX (60min)"];
-        if (!data) return null;
+
+        if (!data) return;
 
         const prices = Object.values(data)
             .map(v => parseFloat(v["4. close"]))
             .reverse();
 
-        if (prices.length < 200) return null;
+        if (prices.length < 200) return;
 
         const last = prices[prices.length - 1];
 
@@ -120,24 +138,23 @@ async function generateSignal() {
         if (last < ma50 && ma50 < ma200) score += 50;
         if (rsi > 45 && rsi < 65) score += 40;
 
-        if (score < 90) return null;
+        if (score < 90) return;
 
         const direction = last > ma50 ? "BUY 📈" : "SELL 📉";
 
         const entry = last;
+
         const sl = direction === "BUY 📈"
-            ? entry - (entry * 0.0025)
-            : entry + (entry * 0.0025);
+            ? entry - entry * 0.0025
+            : entry + entry * 0.0025;
 
         const tp1 = direction === "BUY 📈"
-            ? entry + (entry * 0.005)
-            : entry - (entry * 0.005);
+            ? entry + entry * 0.005
+            : entry - entry * 0.005;
 
         const tp2 = direction === "BUY 📈"
-            ? entry + (entry * 0.01)
-            : entry - (entry * 0.01);
-
-        totalTrades++;
+            ? entry + entry * 0.01
+            : entry - entry * 0.01;
 
         const message = `
 🔥 ASHBOT ELITE SIGNAL
@@ -146,17 +163,17 @@ Pair: EURUSD
 Direction: ${direction}
 
 Entry: ${entry.toFixed(5)}
-Stop Loss: ${sl.toFixed(5)}
+SL: ${sl.toFixed(5)}
 
 🎯 TP1: ${tp1.toFixed(5)}
 🎯 TP2: ${tp2.toFixed(5)}
 
-📊 Confidence: ${score}%
+Confidence: ${score}%
 
 Risk: 1–2%
-RR Ratio: ~1:2
+RR ≈ 1:2
 
-⚠ Research signal only.
+⚠ Free community signal.
 `;
 
         await bot.sendMessage(CHANNEL, message);
@@ -167,10 +184,10 @@ RR Ratio: ~1:2
 }
 
 // ==============================
-// Scheduler (Elite Scan)
+// Scheduler
 // ==============================
 
-setInterval(generateSignal, 60 * 60 * 1000);
+setInterval(communitySignalEngine, 60 * 60 * 1000);
 
 // ==============================
 // Start Server
