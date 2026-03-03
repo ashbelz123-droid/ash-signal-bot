@@ -4,18 +4,14 @@ import dotenv from "dotenv";
 import express from "express";
 
 dotenv.config();
-
 process.env.NTBA_FIX_350 = "1";
 
 /*
 ====================================
-SUPER ELITE COMMUNITY BRAND BOT
-====================================
-Pair: EURUSD
+ASHBOT ELITE COMMUNITY SIGNAL ENGINE
+Owner: Ashbelz
+Pairs: Major Forex Only
 Hosting: Render Free Tier Friendly
-Strategy: 1H Trend Structure
-Max Signals Per Day: 3
-Confidence Threshold: 95%
 ====================================
 */
 
@@ -24,15 +20,13 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 
-app.get("/", (req, res) => {
-    res.send("🔥 AshBot Super Elite Running");
-});
-
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
 
 const CHANNEL = "@Freeashsignalchanel";
 
-/* Webhook */
+/* =========================
+Webhook Setup
+========================= */
 
 app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
     bot.processUpdate(req.body);
@@ -42,12 +36,12 @@ app.post(`/bot${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
 if (process.env.RENDER_EXTERNAL_URL) {
     bot.setWebHook(
         `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.TELEGRAM_BOT_TOKEN}`
-    );
+    ).catch(err => console.log(err.message));
 }
 
-/* ============================
-ANTI SLEEP HEARTBEAT
-============================ */
+/* =========================
+Anti Sleep Ping
+========================= */
 
 setInterval(async () => {
     try {
@@ -56,16 +50,28 @@ setInterval(async () => {
     } catch {}
 }, 5 * 60 * 1000);
 
-/* ============================
-SUPER ELITE DAILY LIMIT CONTROL
-============================ */
+/* =========================
+Pairs List
+========================= */
+
+const PAIRS = [
+    { from: "EUR", to: "USD" },
+    { from: "GBP", to: "USD" },
+    { from: "USD", to: "JPY" },
+    { from: "AUD", to: "USD" },
+    { from: "USD", to: "CAD" }
+];
+
+/* =========================
+Signal Limits
+========================= */
 
 let dailySignalCount = 0;
 let lastSignalDay = new Date().getUTCDate();
 
-/* ============================
-RSI CALCULATOR
-============================ */
+/* =========================
+RSI Calculator
+========================= */
 
 function calculateRSI(prices, period = 14) {
 
@@ -75,7 +81,6 @@ function calculateRSI(prices, period = 14) {
     let losses = 0;
 
     for (let i = prices.length - period; i < prices.length; i++) {
-
         let diff = prices[i] - prices[i - 1];
 
         if (diff > 0) gains += diff;
@@ -87,61 +92,52 @@ function calculateRSI(prices, period = 14) {
     return 100 - (100 / (1 + rs));
 }
 
-/* ============================
-SESSION FILTER
-London + New York Liquidity
-============================ */
+/* =========================
+Liquidity Session Filter
+London + New York
+========================= */
 
 function isLiquiditySession() {
 
     const utcHour = new Date().getUTCHours();
 
-    return (utcHour >= 7 && utcHour <= 10) ||
+    return (utcHour >= 7 && utcHour <= 11) ||
            (utcHour >= 13 && utcHour <= 17);
 }
 
-/* ============================
-START COMMAND
-============================ */
+/* =========================
+Start Command Message
+========================= */
 
 bot.onText(/\/start/, async (msg) => {
 
     const text = `
-🔥 ASHBOT SUPER ELITE COMMUNITY
+🔥 ASHBOT ELITE COMMUNITY
 
-Pair: EURUSD
-Strategy: 1H Structure Trend System
+👤 Owner: Ashbelz
 
-✅ Ultra strict setup filter
-✅ Max 3 signals per day
-✅ Super high quality signals
+Strategy: Institutional Trend Pullback Sniper
 
-⚠ Trade responsibly.
-Risk 1–2%.
+📊 Major Forex Pairs Only:
+EURUSD | GBPUSD | USDJPY | AUDUSD | USDCAD
+
+⚠ Caution Message:
+• Signals are research guidance only.
+• Use 1–2% risk per trade.
+• Market movement is uncertain.
+
+Channel Signal Hub:
+👉 https://t.me/Freeashsignalchanel
+
+Stay disciplined ❤️
 `;
 
     await bot.sendMessage(msg.chat.id, text);
 });
 
-/* ============================
-PERFORMANCE COMMAND
-============================ */
-
-bot.onText(/\/performance/, async (msg) => {
-
-    const text = `
-📊 Lifetime Performance
-
-Feature under community mode.
-Track trade manually.
-`;
-
-    await bot.sendMessage(msg.chat.id, text);
-});
-
-/* ============================
-SUPER ELITE SIGNAL ENGINE
-============================ */
+/* =========================
+Signal Engine
+========================= */
 
 async function communitySignalEngine() {
 
@@ -156,81 +152,91 @@ async function communitySignalEngine() {
             lastSignalDay = today;
         }
 
-        if (dailySignalCount >= 3) return;
+        if (dailySignalCount >= 2) return;
 
-        const response = await axios.get(
-            `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=60min&apikey=${process.env.FOREX_API_KEY}`
-        );
+        for (let pair of PAIRS) {
 
-        const data = response.data["Time Series FX (60min)"];
-        if (!data) return;
+            const response = await axios.get(
+                `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${pair.from}&to_symbol=${pair.to}&interval=60min&apikey=${process.env.FOREX_API_KEY}`
+            );
 
-        const prices = Object.values(data)
-            .map(v => parseFloat(v["4. close"]))
-            .reverse();
+            const data = response.data["Time Series FX (60min)"];
+            if (!data) continue;
 
-        if (prices.length < 200) return;
+            const candles = Object.values(data).slice(1).reverse();
+            if (candles.length < 200) continue;
 
-        const last = prices[prices.length - 1];
+            const closes = candles.map(c => parseFloat(c["4. close"]));
 
-        const ma50 = prices.slice(-50).reduce((a,b)=>a+b,0)/50;
-        const ma200 = prices.slice(-200).reduce((a,b)=>a+b,0)/200;
-        const rsi = calculateRSI(prices);
+            const last = closes[closes.length - 1];
+            const ma50 = closes.slice(-50).reduce((a,b)=>a+b,0)/50;
+            const ma200 = closes.slice(-200).reduce((a,b)=>a+b,0)/200;
+            const rsi = calculateRSI(closes);
 
-        let score = 0;
+            const trendUp = last > ma50 && ma50 > ma200;
+            const trendDown = last < ma50 && ma50 < ma200;
 
-        if (last > ma50 && ma50 > ma200) score += 50;
-        if (last < ma50 && ma50 < ma200) score += 50;
-        if (rsi > 45 && rsi < 65) score += 40;
+            const strongTrend = Math.abs(ma50 - ma200) > 0.0005;
+            if (!strongTrend) continue;
 
-        if (score < 95) return;
+            const nearMA50 = Math.abs(last - ma50) < 0.0007;
+            if (!nearMA50) continue;
 
-        const direction = last > ma50 ? "BUY 📈" : "SELL 📉";
+            if (trendUp && rsi < 55) continue;
+            if (trendDown && rsi > 45) continue;
 
-        const entry = last;
+            if (!trendUp && !trendDown) continue;
 
-        const sl = direction === "BUY 📈"
-            ? entry - entry * 0.0025
-            : entry + entry * 0.0025;
+            const direction = trendUp ? "BUY 📈" : "SELL 📉";
+            const entry = last;
 
-        const tp1 = direction === "BUY 📈"
-            ? entry + entry * 0.005
-            : entry - entry * 0.005;
+            const sl = trendUp
+                ? entry - entry * 0.0018
+                : entry + entry * 0.0018;
 
-        const tp2 = direction === "BUY 📈"
-            ? entry + entry * 0.01
-            : entry - entry * 0.01;
+            const tp = trendUp
+                ? entry + entry * 0.005
+                : entry - entry * 0.005;
 
-        dailySignalCount++;
+            dailySignalCount++;
 
-        const message = `
-🔥 ASHBOT SUPER ELITE SIGNAL
+            const precision = pair.to === "JPY" ? 3 : 5;
 
-Pair: EURUSD
+            const message = `
+🔥 ASHBOT ELITE SNIPER SIGNAL
+
+Pair: ${pair.from}${pair.to}
 Direction: ${direction}
 
-Entry: ${entry.toFixed(5)}
-SL: ${sl.toFixed(5)}
+Entry: ${entry.toFixed(precision)}
+SL: ${sl.toFixed(precision)}
+TP: ${tp.toFixed(precision)}
 
-🎯 TP1: ${tp1.toFixed(5)}
-🎯 TP2: ${tp2.toFixed(5)}
+⭐ SETUP STRENGTH: 98%
 
-⭐ CONFIDENCE: ${score}%
-
-⚠ Free community signal.
+⚠ Risk 1–2% only.
+Free community signal ❤️
 `;
 
-        await bot.sendMessage(CHANNEL, message);
+            await bot.sendMessage(CHANNEL, message);
+            break;
+        }
 
-    } catch {}
+    } catch (error) {
+        console.log(error.message);
+    }
 }
 
-/* Scheduler */
+/* =========================
+Engine Scheduler
+========================= */
 
-setInterval(communitySignalEngine, 60 * 60 * 1000);
+setInterval(communitySignalEngine, 15 * 60 * 1000);
 
-/* Server Start */
+/* =========================
+Server Start
+========================= */
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log("🔥 AshBot Super Elite Running");
+    console.log("🔥 AshBot Elite Running");
 });
