@@ -1,0 +1,5 @@
+{
+  "key": "mysecret123",
+  "pair": "{{ticker}}",
+  "action": "{{strategy.order.action}}"
+}
